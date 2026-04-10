@@ -1,0 +1,84 @@
+name: Deploy Global Sync Service to DEV
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  ACR_NAME: petaverseacr
+
+jobs:
+  build:
+    name: Build Global Sync Service Image
+    uses: petaverse-cloud/pv-wigowago-api/.github/workflows/reusable-docker-build.yml@main
+    with:
+      project_name: "Global Sync Service"
+      image_name: "global-sync-service"
+      build_context: "."
+      dockerfile: "Dockerfile"
+    secrets:
+      azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+      feishu_webhook: ${{ secrets.FEISHU_WEBHOOK }}
+
+  update-manifests:
+    name: Update DEV Manifests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.ARGOCD_APP_ID }}
+          private-key: ${{ secrets.ARGOCD_APP_PRIVATE_KEY }}
+          repositories: pv-k8s-manifests
+
+      - name: Checkout pv-k8s-manifests repo
+        uses: actions/checkout@v4
+        with:
+          repository: petaverse-cloud/pv-k8s-manifests
+          token: ${{ steps.generate_token.outputs.token }}
+          path: pv-k8s-manifests
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Update DEV kustomization
+        run: |
+          cd pv-k8s-manifests/overlays/devops-sea/wigowago-global-sync
+          kustomize edit set image \
+            petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}
+
+      - name: Commit and push manifest changes
+        run: |
+          cd pv-k8s-manifests
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add overlays/devops-sea/wigowago-global-sync/kustomization.yaml
+          git commit -m "chore(dev): Update global-sync-service image to ${{ needs.build.outputs.image_tag }}" || echo "No changes to commit"
+          git push || echo "No changes to push"
+
+      - name: Get commit message
+        id: commit
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B | head -1)
+          echo "message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+
+      - name: Notify deployment
+        uses: petaverse-cloud/pv-github-actions/feishu-notification@main
+        with:
+          webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
+          status: 'success'
+          project_name: 'Global Sync Service DEV Deployment'
+          commit_sha: ${{ needs.build.outputs.image_tag }}
+          commit_message: ${{ steps.commit.outputs.message }}
+          image_info: 'petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}'
