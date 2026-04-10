@@ -1,3 +1,4 @@
+// Package server holds the HTTP server and all its dependencies
 package server
 
 import (
@@ -10,6 +11,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/config"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/handler"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/postgres"
 	redispkg "github.com/petaverse-cloud/pv-global-sync-service/pkg/redis"
@@ -22,16 +26,24 @@ type Server struct {
 	cfg        *config.Config
 	log        *logger.Logger
 
-	// Infrastructure components
+	// Infrastructure
 	DB    *postgres.Manager
 	Redis *redispkg.Client
+
+	// Services
+	IndexSvc     *service.GlobalIndexService
+	AuditSvc     *service.AuditLogService
+	EventLogSvc  *service.SyncEventLogService
+	GDPRChecker  *service.GDPRChecker
+	SyncConsumer *consumer.SyncConsumer
+	SyncHandler  *handler.SyncHandler
 }
 
 // New creates a new server with all dependencies initialized
 func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	ctx := context.Background()
 
-	// Initialize PostgreSQL
+	// --- Infrastructure ---
 	log.Info("Connecting to PostgreSQL databases...")
 	db, err := postgres.NewManager(ctx,
 		postgres.Config{
@@ -56,7 +68,6 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	}
 	log.Info("PostgreSQL connected")
 
-	// Initialize Redis
 	log.Info("Connecting to Redis...")
 	redis, err := redispkg.New(ctx, redispkg.Config{
 		Host:     cfg.RedisHost,
@@ -70,14 +81,27 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	}
 	log.Info("Redis connected")
 
-	// Initialize Router
+	// --- Services ---
+	auditSvc := service.NewAuditLogService(db)
+	indexSvc := service.NewGlobalIndexService(db.GlobalIndex(), log)
+	eventLogSvc := service.NewSyncEventLogService(db, redis, log)
+	gdprChecker := service.NewGDPRChecker(db, redis, auditSvc, log)
+
+	syncConsumer := consumer.NewSyncConsumer(
+		eventLogSvc, gdprChecker, indexSvc, auditSvc, log,
+	)
+
+	syncHandler := handler.NewSyncHandler(
+		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, log,
+	)
+
+	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	// Register routes
-	registerRoutes(r, db, redis, log)
+	registerRoutes(r, db, redis, syncHandler, log)
 
 	s := &Server{
 		cfg:    cfg,
@@ -85,6 +109,13 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		router: r,
 		DB:     db,
 		Redis:  redis,
+
+		IndexSvc:     indexSvc,
+		AuditSvc:     auditSvc,
+		EventLogSvc:  eventLogSvc,
+		GDPRChecker:  gdprChecker,
+		SyncConsumer: syncConsumer,
+		SyncHandler:  syncHandler,
 		httpServer: &http.Server{
 			Handler:           r,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -95,7 +126,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 }
 
 // registerRoutes sets up all HTTP routes
-func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, log *logger.Logger) {
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, log *logger.Logger) {
 	// Health checks
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		handleHealth(w, req, db, redis, log)
@@ -105,9 +136,14 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, lo
 		handleReadiness(w, req, db, redis, log)
 	})
 
-	// TODO: Business routes (Phase 2-3)
-	// r.Post("/sync/content", syncHandler.HandleSync)
-	// r.Post("/sync/cross-sync", syncHandler.HandleCrossSync)
+	// Sync endpoints (Phase 2)
+	r.Post("/sync/content", syncHandler.HandleSync)
+	r.Post("/sync/cross-sync", syncHandler.HandleCrossSync)
+
+	// Global index query (Phase 2)
+	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
+
+	// TODO: Feed endpoints (Phase 3)
 	// r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
 }
 

@@ -1,0 +1,210 @@
+// Package handler implements HTTP request handlers for the Global Sync Service.
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
+	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
+)
+
+// SyncHandler handles HTTP sync endpoints.
+type SyncHandler struct {
+	consumer    *consumer.SyncConsumer
+	eventLog    *service.SyncEventLogService
+	gdprChecker *service.GDPRChecker
+	indexSvc    *service.GlobalIndexService
+	auditSvc    *service.AuditLogService
+	log         *logger.Logger
+}
+
+// NewSyncHandler creates a new sync handler.
+func NewSyncHandler(
+	consumer *consumer.SyncConsumer,
+	eventLog *service.SyncEventLogService,
+	gdprChecker *service.GDPRChecker,
+	indexSvc *service.GlobalIndexService,
+	auditSvc *service.AuditLogService,
+	log *logger.Logger,
+) *SyncHandler {
+	return &SyncHandler{
+		consumer:    consumer,
+		eventLog:    eventLog,
+		gdprChecker: gdprChecker,
+		indexSvc:    indexSvc,
+		auditSvc:    auditSvc,
+		log:         log,
+	}
+}
+
+// HandleSync handles POST /sync/content from the local WigoWago API.
+func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var event model.CrossRegionSyncEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if err := h.processEvent(r.Context(), &event, "local_api"); err != nil {
+		h.log.Error("Sync handler failed",
+			logger.String("event_id", event.EventID),
+			logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "processing failed: "+err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "accepted",
+		"eventId": event.EventID,
+	})
+}
+
+// HandleCrossSync handles POST /sync/cross-sync from the peer region's sync service.
+func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var event model.CrossRegionSyncEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if err := h.processEvent(r.Context(), &event, "cross_sync"); err != nil {
+		h.log.Error("Cross-sync handler failed",
+			logger.String("event_id", event.EventID),
+			logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "processing failed: "+err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "accepted",
+		"eventId": event.EventID,
+	})
+}
+
+// HandleGetPost handles GET /index/posts/:postId for querying the global index.
+func (h *SyncHandler) HandleGetPost(w http.ResponseWriter, r *http.Request) {
+	postIDStr := chi.URLParam(r, "postId")
+	if postIDStr == "" {
+		writeError(w, http.StatusBadRequest, "missing postId")
+		return
+	}
+
+	postID, err := parseInt64(postIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid postId")
+		return
+	}
+
+	post, err := h.indexSvc.GetPost(r.Context(), postID)
+	if err != nil {
+		h.log.Error("Failed to get post",
+			logger.Int64("post_id", postID),
+			logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if post == nil {
+		writeError(w, http.StatusNotFound, "post not found in global index")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(post)
+}
+
+func parseInt64(s string) (int64, error) {
+	var n int64
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, errNotDigit
+		}
+		n = n*10 + int64(c-'0')
+	}
+	return n, nil
+}
+
+var errNotDigit = fmt.Errorf("not a digit")
+
+// processEvent runs the full sync pipeline for an event.
+func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegionSyncEvent, source string) error {
+	// Validate
+	if event.EventID == "" || event.EventType == "" {
+		return fmt.Errorf("missing required fields: eventId and eventType are required")
+	}
+
+	// Idempotency
+	processed, err := h.eventLog.IsProcessed(ctx, event.EventID)
+	if err != nil {
+		return err
+	}
+	if processed {
+		h.log.Debug("Event already processed",
+			logger.String("event_id", event.EventID),
+			logger.String("source", source))
+		return nil
+	}
+
+	// GDPR check
+	result := h.gdprChecker.Check(event)
+	h.auditSvc.Log(ctx, event, result.Allowed, result.Reason) //nolint:errcheck
+
+	if !result.Allowed {
+		h.eventLog.MarkProcessed(ctx, event, "gdpr_denied: "+result.Reason) //nolint:errcheck
+		return nil // Denied is not an error from the caller's perspective
+	}
+
+	// Route to handler
+	if err := routeEvent(h.indexSvc, event); err != nil {
+		h.eventLog.MarkProcessed(ctx, event, err.Error()) //nolint:errcheck
+		return err
+	}
+
+	h.eventLog.MarkProcessed(ctx, event, "") //nolint:errcheck
+	return nil
+}
+
+// routeEvent dispatches to the appropriate index operation.
+func routeEvent(svc *service.GlobalIndexService, event *model.CrossRegionSyncEvent) error {
+	ctx := context.Background() // In production, derive from request context
+	switch event.EventType {
+	case model.EventTypePostCreated:
+		return svc.InsertPost(ctx, event)
+	case model.EventTypePostUpdated:
+		return svc.UpdatePost(ctx, event)
+	case model.EventTypePostDeleted:
+		return svc.DeletePost(ctx, event)
+	default:
+		return nil
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error":   http.StatusText(status),
+		"message": message,
+	})
+}
