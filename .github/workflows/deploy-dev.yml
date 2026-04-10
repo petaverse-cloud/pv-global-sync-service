@@ -31,19 +31,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App token
-        id: generate_token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.ARGOCD_APP_ID }}
-          private-key: ${{ secrets.ARGOCD_APP_PRIVATE_KEY }}
-          repositories: pv-k8s-manifests
-
       - name: Checkout pv-k8s-manifests repo
         uses: actions/checkout@v4
         with:
           repository: petaverse-cloud/pv-k8s-manifests
-          token: ${{ steps.generate_token.outputs.token }}
+          token: ${{ secrets.MANIFESTS_TOKEN }}
           path: pv-k8s-manifests
 
       - name: Install kustomize

@@ -4,32 +4,31 @@
 
 The `deploy-dev.yml` workflow requires these repository secrets:
 
-| Secret | Description | How to Get |
-|--------|-------------|------------|
-| `AZURE_CREDENTIALS` | Azure service principal JSON for ACR login | Copy from pv-wigowago-api repo secrets |
-| `FEISHU_WEBHOOK` | Feishu notification webhook URL | Copy from pv-wigowago-api repo secrets |
-| `ARGOCD_APP_ID` | GitHub App ID for pushing to pv-k8s-manifests | Copy from pv-wigowago-api repo secrets |
-| `ARGOCD_APP_PRIVATE_KEY` | GitHub App private key (PEM) | Copy from pv-wigowago-api repo secrets |
+| Secret | Description | Source |
+|--------|-------------|--------|
+| `AZURE_CREDENTIALS` | Azure SP JSON for ACR login | ✅ Auto-set from petaverse-keyvault |
+| `FEISHU_WEBHOOK` | Feishu notification webhook URL | ✅ Auto-set from petaverse-keyvault |
+| `MANIFESTS_TOKEN` | GitHub PAT with write access to pv-k8s-manifests | See below |
 
-## How to Set Secrets
+## MANIFESTS_TOKEN Setup
 
-1. Go to: https://github.com/petaverse-cloud/pv-global-sync-service/settings/secrets/actions
-2. Click "New repository secret"
-3. For each secret above, copy the value from pv-wigowago-api and paste it here
+Create a fine-grained Personal Access Token with:
+- Repository access: `petaverse-cloud/pv-k8s-manifests` only
+- Permissions: Contents (Read and Write)
 
-## Alternative: Copy from pv-wigowago-api
+Steps:
+1. Go to: https://github.com/settings/tokens?type=beta
+2. Click "Generate new token"
+3. Token name: `global-sync-service-manifests`
+4. Expiration: 90 days (or your preference)
+5. Repository access: Select repositories → `petaverse-cloud/pv-k8s-manifests`
+6. Permissions → Repository permissions → Contents: Read and write
+7. Generate token and copy the value
+8. Set the secret:
 
 ```bash
-# In a terminal with gh CLI authenticated:
-cd pv-global-sync-service
-
-# You'll need to manually copy values from:
-# https://github.com/petaverse-cloud/pv-wigowago-api/settings/secrets/actions
-
-gh secret set AZURE_CREDENTIALS --body "..."
-gh secret set FEISHU_WEBHOOK --body "..."
-gh secret set ARGOCD_APP_ID --body "..."
-gh secret set ARGOCD_APP_PRIVATE_KEY --body "..."
+cd ~/pv-global-sync-service
+gh secret set MANIFESTS_TOKEN --body "ghp_xxxxxxxx"
 ```
 
 ## How the CI/CD Pipeline Works
@@ -37,10 +36,10 @@ gh secret set ARGOCD_APP_PRIVATE_KEY --body "..."
 ```
 push to main
     │
-    ├── build job: build Docker image → push to ACR
+    ├── build job: build Docker image → push to ACR (via Azure SP)
     │
     └── update-manifests job:
-            ├── checkout pv-k8s-manifests (using GitHub App token)
+            ├── checkout pv-k8s-manifests (using MANIFESTS_TOKEN PAT)
             ├── update kustomization.yaml with new image tag
             └── push to pv-k8s-manifests/main
                     │
@@ -50,7 +49,7 @@ push to main
 
 ## ArgoCD Secrets (pv-k8s-manifests repo - already configured)
 
-| Secret | Value | Status |
-|--------|-------|--------|
-| `ARGOCD_SERVER` | `https://argocd.verse4.pet` | ✅ Set |
-| `ARGOCD_TOKEN` | Generated from argocd CLI | ✅ Refreshed 2026-04-10 |
+| Secret | Status |
+|--------|--------|
+| `ARGOCD_SERVER` | ✅ Set (https://argocd.verse4.pet) |
+| `ARGOCD_TOKEN` | ✅ Refreshed 2026-04-10 |
