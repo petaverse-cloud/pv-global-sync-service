@@ -1,0 +1,61 @@
+# Local development environment for Global Sync Service
+# Note: RocketMQ requires additional setup - use external instance or follow RocketMQ Docker guide
+
+services:
+  # Regional DB - simulates the region's local PostgreSQL
+  postgres-regional:
+    image: postgres:16
+    container_name: gss_postgres_regional
+    environment:
+      POSTGRES_USER: gss
+      POSTGRES_PASSWORD: gss
+      POSTGRES_DB: wigowago_regional
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_regional_data:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gss"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Global Index DB - simulates the global index PostgreSQL
+  postgres-index:
+    image: postgres:16
+    container_name: gss_postgres_index
+    environment:
+      POSTGRES_USER: gss
+      POSTGRES_PASSWORD: gss
+      POSTGRES_DB: wigowago_global_index
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_index_data:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gss"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Stack - with JSON and Search modules
+  redis:
+    image: redis/redis-stack:latest
+    container_name: gss_redis
+    ports:
+      - "6379:6379"
+      - "8001:8001"  # Redis Insight
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg_regional_data:
+  pg_index_data:
+  redis_data:

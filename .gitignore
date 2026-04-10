@@ -1,0 +1,33 @@
+# Binaries
+bin/
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Test artifacts
+test-output/
+
+# Docker
+*.pid
