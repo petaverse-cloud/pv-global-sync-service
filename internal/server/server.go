@@ -2,47 +2,170 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/config"
-	"github.com/petaverse-cloud/pv-global-sync-service/internal/health"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
+	"github.com/petaverse-cloud/pv-global-sync-service/pkg/postgres"
+	redispkg "github.com/petaverse-cloud/pv-global-sync-service/pkg/redis"
 )
 
-// Server holds the HTTP server and its dependencies
+// Server holds the HTTP server and all its dependencies
 type Server struct {
 	httpServer *http.Server
+	router     *chi.Mux
 	cfg        *config.Config
 	log        *logger.Logger
+
+	// Infrastructure components
+	DB    *postgres.Manager
+	Redis *redispkg.Client
 }
 
-// New creates a new server instance
+// New creates a new server with all dependencies initialized
 func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
-	mux := http.NewServeMux()
+	ctx := context.Background()
 
-	// Register health check routes
-	health.Register(mux)
+	// Initialize PostgreSQL
+	log.Info("Connecting to PostgreSQL databases...")
+	db, err := postgres.NewManager(ctx,
+		postgres.Config{
+			Host:     cfg.RegionalDBHost,
+			Port:     cfg.RegionalDBPort,
+			User:     cfg.RegionalDBUser,
+			Password: cfg.RegionalDBPassword,
+			DBName:   cfg.RegionalDBName,
+			SSLMode:  cfg.RegionalDBSSLMode,
+		},
+		postgres.Config{
+			Host:     cfg.GlobalIndexDBHost,
+			Port:     cfg.GlobalIndexDBPort,
+			User:     cfg.GlobalIndexDBUser,
+			Password: cfg.GlobalIndexDBPassword,
+			DBName:   cfg.GlobalIndexDBName,
+			SSLMode:  cfg.GlobalIndexDBSSLMode,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("PostgreSQL connected")
 
-	// TODO: Register business routes
-	// - POST /sync/content - receive sync events from local API
-	// - POST /sync/cross-sync - receive cross-region sync events
-	// - GET /feed/generate - generate feed for a user
-	// - GET /feed/:userId - get user's feed
+	// Initialize Redis
+	log.Info("Connecting to Redis...")
+	redis, err := redispkg.New(ctx, redispkg.Config{
+		Host:     cfg.RedisHost,
+		Port:     cfg.RedisPort,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	log.Info("Redis connected")
 
-	// TODO: Register middleware
-	// - Request logging
-	// - Recovery/panic handling
-	// - Metrics
+	// Initialize Router
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Recoverer)
+
+	// Register routes
+	registerRoutes(r, db, redis, log)
 
 	s := &Server{
-		cfg: cfg,
-		log: log,
+		cfg:    cfg,
+		log:    log,
+		router: r,
+		DB:     db,
+		Redis:  redis,
 		httpServer: &http.Server{
-			Handler: mux,
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second,
 		},
 	}
 
 	return s, nil
+}
+
+// registerRoutes sets up all HTTP routes
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, log *logger.Logger) {
+	// Health checks
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		handleHealth(w, req, db, redis, log)
+	})
+	r.Get("/health/live", handleLiveness)
+	r.Get("/health/ready", func(w http.ResponseWriter, req *http.Request) {
+		handleReadiness(w, req, db, redis, log)
+	})
+
+	// TODO: Business routes (Phase 2-3)
+	// r.Post("/sync/content", syncHandler.HandleSync)
+	// r.Post("/sync/cross-sync", syncHandler.HandleCrossSync)
+	// r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
+}
+
+// handleHealth returns overall service health including dependencies
+func handleHealth(w http.ResponseWriter, r *http.Request, db *postgres.Manager, redis *redispkg.Client, log *logger.Logger) {
+	status := "ok"
+
+	if err := db.Ping(r.Context()); err != nil {
+		status = "degraded"
+		log.Warn("Database health check failed", logger.Error(err))
+	}
+
+	if err := redis.Ping(r.Context()); err != nil {
+		status = "degraded"
+		log.Warn("Redis health check failed", logger.Error(err))
+	}
+
+	response := map[string]interface{}{
+		"status":    status,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"service":   "global-sync-service",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if status == "degraded" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleLiveness is a simple liveness check
+func handleLiveness(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
+}
+
+// handleReadiness checks if all dependencies are ready
+func handleReadiness(w http.ResponseWriter, r *http.Request, db *postgres.Manager, redis *redispkg.Client, log *logger.Logger) {
+	if err := db.Ping(r.Context()); err != nil {
+		log.Warn("Readiness check failed: database", logger.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"status": "not ready: database"})
+		return
+	}
+
+	if err := redis.Ping(r.Context()); err != nil {
+		log.Warn("Readiness check failed: redis", logger.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"status": "not ready: redis"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
 
 // Listen starts the HTTP server
@@ -50,11 +173,17 @@ func (s *Server) Listen(addr string) error {
 	return s.httpServer.ListenAndServe()
 }
 
-// Shutdown gracefully shuts down the server
+// Shutdown gracefully shuts down the server and all dependencies
 func (s *Server) Shutdown(ctx context.Context) error {
-	// TODO: Shutdown RocketMQ consumer
-	// TODO: Shutdown RocketMQ producer
-	// TODO: Close database connections
-	// TODO: Close Redis connection
+	s.log.Info("Shutting down dependencies...")
+
+	s.DB.Close()
+	s.log.Info("PostgreSQL connections closed")
+
+	if err := s.Redis.Close(); err != nil {
+		s.log.Error("Error closing Redis", logger.Error(err))
+	}
+	s.log.Info("Redis connection closed")
+
 	return s.httpServer.Shutdown(ctx)
 }

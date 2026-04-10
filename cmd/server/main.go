@@ -36,13 +36,13 @@ func main() {
 		logger.String("region", cfg.Region),
 	)
 
-	// Initialize server
+	// Initialize server (connects to DB, Redis)
 	srv, err := server.New(cfg, log)
 	if err != nil {
 		log.Fatal("Failed to initialize server", logger.Error(err))
 	}
 
-	// Start server in a goroutine
+	// Start HTTP server in a goroutine
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.HTTPPort)
 		log.Info("HTTP server listening", logger.String("addr", addr))
