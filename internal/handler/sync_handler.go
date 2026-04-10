@@ -17,12 +17,13 @@ import (
 
 // SyncHandler handles HTTP sync endpoints.
 type SyncHandler struct {
-	consumer    *consumer.SyncConsumer
-	eventLog    *service.SyncEventLogService
-	gdprChecker *service.GDPRChecker
-	indexSvc    *service.GlobalIndexService
-	auditSvc    *service.AuditLogService
-	log         *logger.Logger
+	consumer      *consumer.SyncConsumer
+	eventLog      *service.SyncEventLogService
+	gdprChecker   *service.GDPRChecker
+	indexSvc      *service.GlobalIndexService
+	auditSvc      *service.AuditLogService
+	feedGenerator *service.FeedGenerator
+	log           *logger.Logger
 }
 
 // NewSyncHandler creates a new sync handler.
@@ -32,15 +33,17 @@ func NewSyncHandler(
 	gdprChecker *service.GDPRChecker,
 	indexSvc *service.GlobalIndexService,
 	auditSvc *service.AuditLogService,
+	feedGenerator *service.FeedGenerator,
 	log *logger.Logger,
 ) *SyncHandler {
 	return &SyncHandler{
-		consumer:    consumer,
-		eventLog:    eventLog,
-		gdprChecker: gdprChecker,
-		indexSvc:    indexSvc,
-		auditSvc:    auditSvc,
-		log:         log,
+		consumer:      consumer,
+		eventLog:      eventLog,
+		gdprChecker:   gdprChecker,
+		indexSvc:      indexSvc,
+		auditSvc:      auditSvc,
+		feedGenerator: feedGenerator,
+		log:           log,
 	}
 }
 
@@ -176,7 +179,7 @@ func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegion
 	}
 
 	// Route to handler
-	if err := routeEvent(h.indexSvc, event); err != nil {
+	if err := h.routeEvent(ctx, event); err != nil {
 		h.eventLog.MarkProcessed(ctx, event, err.Error()) //nolint:errcheck
 		return err
 	}
@@ -186,15 +189,32 @@ func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegion
 }
 
 // routeEvent dispatches to the appropriate index operation.
-func routeEvent(svc *service.GlobalIndexService, event *model.CrossRegionSyncEvent) error {
-	ctx := context.Background() // In production, derive from request context
+func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	switch event.EventType {
 	case model.EventTypePostCreated:
-		return svc.InsertPost(ctx, event)
+		if err := h.indexSvc.InsertPost(ctx, event); err != nil {
+			return err
+		}
+		// Trigger feed generation after successful insert
+		if err := h.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorID, event.Payload.PostID); err != nil {
+			h.log.Error("Feed generation failed, but post was synced",
+				logger.Int64("post_id", event.Payload.PostID),
+				logger.Error(err))
+		}
+		return nil
 	case model.EventTypePostUpdated:
-		return svc.UpdatePost(ctx, event)
+		return h.indexSvc.UpdatePost(ctx, event)
 	case model.EventTypePostDeleted:
-		return svc.DeletePost(ctx, event)
+		if err := h.indexSvc.DeletePost(ctx, event); err != nil {
+			return err
+		}
+		// Invalidate feed caches
+		if err := h.feedGenerator.HandleDeletedPost(ctx, event.Payload.PostID); err != nil {
+			h.log.Warn("Feed cache invalidation failed",
+				logger.Int64("post_id", event.Payload.PostID),
+				logger.Error(err))
+		}
+		return nil
 	default:
 		return nil
 	}

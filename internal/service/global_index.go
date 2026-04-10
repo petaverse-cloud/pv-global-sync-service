@@ -305,3 +305,98 @@ func truncatePreview(content string, maxLen int) string {
 	}
 	return content[:maxLen] + "..."
 }
+
+// GetPostsFromAuthors retrieves global posts from a list of authors.
+// Used for the "following" feed pull mode.
+func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs []int64, limit int) ([]GlobalIndexPost, error) {
+	query := `
+		SELECT post_id, author_id, content_preview,
+		       likes_count, comments_count, shares_count, views_count,
+		       created_at
+		FROM global_post_index
+		WHERE author_id = ANY($1)
+		ORDER BY created_at DESC
+		LIMIT $2
+	`
+
+	rows, err := s.db.Query(ctx, query, authorIDs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query posts from authors: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []GlobalIndexPost
+	for rows.Next() {
+		var p GlobalIndexPost
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
+			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
+// GetGlobalPosts retrieves recent public posts from all authors.
+// Used for the "global" feed.
+func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
+	query := `
+		SELECT post_id, author_id, content_preview,
+		       likes_count, comments_count, shares_count, views_count,
+		       created_at
+		FROM global_post_index
+		ORDER BY created_at DESC
+		LIMIT $1
+	`
+
+	rows, err := s.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query global posts: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []GlobalIndexPost
+	for rows.Next() {
+		var p GlobalIndexPost
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
+			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
+// GetTrendingPosts retrieves posts with highest engagement in the last 24 hours.
+// Used for the "trending" feed.
+func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
+	query := `
+		SELECT post_id, author_id, content_preview,
+		       likes_count, comments_count, shares_count, views_count,
+		       created_at
+		FROM global_post_index
+		WHERE created_at > NOW() - INTERVAL '24 hours'
+		ORDER BY (likes_count + comments_count*2 + shares_count*3) DESC
+		LIMIT $1
+	`
+
+	rows, err := s.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query trending posts: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []GlobalIndexPost
+	for rows.Next() {
+		var p GlobalIndexPost
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
+			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}

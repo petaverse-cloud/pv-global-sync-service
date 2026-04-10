@@ -31,12 +31,16 @@ type Server struct {
 	Redis *redispkg.Client
 
 	// Services
-	IndexSvc     *service.GlobalIndexService
-	AuditSvc     *service.AuditLogService
-	EventLogSvc  *service.SyncEventLogService
-	GDPRChecker  *service.GDPRChecker
+	IndexSvc      *service.GlobalIndexService
+	AuditSvc      *service.AuditLogService
+	EventLogSvc   *service.SyncEventLogService
+	GDPRChecker   *service.GDPRChecker
+	FeedGenerator *service.FeedGenerator
+
+	// Consumers/Handlers
 	SyncConsumer *consumer.SyncConsumer
 	SyncHandler  *handler.SyncHandler
+	FeedHandler  *handler.FeedHandler
 }
 
 // New creates a new server with all dependencies initialized
@@ -87,13 +91,19 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	eventLogSvc := service.NewSyncEventLogService(db, redis, log)
 	gdprChecker := service.NewGDPRChecker(db, redis, auditSvc, log)
 
+	feedGenerator := service.NewFeedGenerator(
+		db, redis, indexSvc, log, cfg.FeedPushThreshold,
+	)
+
 	syncConsumer := consumer.NewSyncConsumer(
 		eventLogSvc, gdprChecker, indexSvc, auditSvc, log,
 	)
 
 	syncHandler := handler.NewSyncHandler(
-		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, log,
+		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, log,
 	)
+
+	feedHandler := handler.NewFeedHandler(feedGenerator, log)
 
 	// --- Router ---
 	r := chi.NewRouter()
@@ -101,7 +111,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	registerRoutes(r, db, redis, syncHandler, log)
+	registerRoutes(r, db, redis, syncHandler, feedHandler, log)
 
 	s := &Server{
 		cfg:    cfg,
@@ -110,12 +120,14 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		DB:     db,
 		Redis:  redis,
 
-		IndexSvc:     indexSvc,
-		AuditSvc:     auditSvc,
-		EventLogSvc:  eventLogSvc,
-		GDPRChecker:  gdprChecker,
-		SyncConsumer: syncConsumer,
-		SyncHandler:  syncHandler,
+		IndexSvc:      indexSvc,
+		AuditSvc:      auditSvc,
+		EventLogSvc:   eventLogSvc,
+		GDPRChecker:   gdprChecker,
+		FeedGenerator: feedGenerator,
+		SyncConsumer:  syncConsumer,
+		SyncHandler:   syncHandler,
+		FeedHandler:   feedHandler,
 		httpServer: &http.Server{
 			Handler:           r,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -126,7 +138,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 }
 
 // registerRoutes sets up all HTTP routes
-func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, log *logger.Logger) {
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, log *logger.Logger) {
 	// Health checks
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		handleHealth(w, req, db, redis, log)
@@ -143,8 +155,8 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 	// Global index query (Phase 2)
 	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
 
-	// TODO: Feed endpoints (Phase 3)
-	// r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
+	// Feed endpoints (Phase 3)
+	r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
 }
 
 // handleHealth returns overall service health including dependencies
