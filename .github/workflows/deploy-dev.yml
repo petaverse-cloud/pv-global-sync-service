@@ -110,3 +110,53 @@ jobs:
       - name: Azure Logout
         if: always()
         run: az logout
+
+  update-manifests:
+    name: Update DEV Manifests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.ARGOCD_APP_ID }}
+          private-key: ${{ secrets.ARGOCD_APP_PRIVATE_KEY }}
+          repositories: pv-k8s-manifests
+
+      - name: Checkout pv-k8s-manifests repo
+        uses: actions/checkout@v4
+        with:
+          repository: petaverse-cloud/pv-k8s-manifests
+          token: ${{ steps.generate_token.outputs.token }}
+          path: pv-k8s-manifests
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Update DEV kustomization
+        run: |
+          cd pv-k8s-manifests/overlays/devops-sea/wigowago-global-sync
+          kustomize edit set image \
+            petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}
+
+      - name: Commit and push manifest changes
+        run: |
+          cd pv-k8s-manifests
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add overlays/devops-sea/wigowago-global-sync/kustomization.yaml
+          git commit -m "chore(dev): Update global-sync-service image to ${{ needs.build.outputs.image_tag }}" || echo "No changes to commit"
+          git push || echo "No changes to push"
+
+      - name: Notify deployment
+        uses: petaverse-cloud/pv-github-actions/feishu-notification@main
+        with:
+          webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
+          status: 'success'
+          project_name: 'Global Sync Service DEV Deployment'
+          commit_sha: ${{ needs.build.outputs.image_tag }}
+          image_info: 'petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}'
