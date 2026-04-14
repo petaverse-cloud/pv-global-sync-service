@@ -1,13 +1,12 @@
-name: Deploy Global Sync Service to DEV
+name: Build and Push (Dev)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths-ignore:
-      - '**.md'
-      - '.github/**'
+      - '*.md'
       - 'docs/**'
+      - '.github/**'
   workflow_dispatch:
 
 env:
@@ -15,49 +14,22 @@ env:
 
 jobs:
   build:
-    name: Build Global Sync Service Image
-    uses: petaverse-cloud/pv-wigowago-api/.github/workflows/reusable-docker-build.yml@main
-    with:
-      project_name: "Global Sync Service"
-      image_name: "global-sync-service"
-      build_context: "."
-      dockerfile: "Dockerfile"
-    secrets:
-      azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
-      feishu_webhook: ${{ secrets.FEISHU_WEBHOOK }}
-
-  update-manifests:
-    name: Update DEV Manifests
-    needs: build
+    name: Build and Push
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
     steps:
-      - name: Checkout pv-k8s-manifests repo
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: petaverse-cloud/pv-k8s-manifests
-          token: ${{ secrets.MANIFESTS_TOKEN }}
-          path: pv-k8s-manifests
 
-      - name: Install kustomize
+      - name: Extract Git metadata
+        id: meta
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          sudo mv kustomize /usr/local/bin/
-
-      - name: Update DEV kustomization
-        run: |
-          cd pv-k8s-manifests/overlays/devops-sea/wigowago-global-sync
-          kustomize edit set image \
-            petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}
-
-      - name: Commit and push manifest changes
-        run: |
-          cd pv-k8s-manifests
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add overlays/devops-sea/wigowago-global-sync/kustomization.yaml
-          git commit -m "chore(dev): Update global-sync-service image to ${{ needs.build.outputs.image_tag }}" || echo "No changes to commit"
-          git push || echo "No changes to push"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+          echo "image_tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Get commit message
         id: commit
@@ -65,12 +37,77 @@ jobs:
           COMMIT_MSG=$(git log -1 --pretty=%B | head -1)
           echo "message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
 
-      - name: Notify deployment
+      - name: Notify build start
+        uses: petaverse-cloud/pv-github-actions/feishu-notification@main
+        with:
+          webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
+          status: 'started'
+          project_name: 'Global Sync Service'
+          branch: ${{ steps.meta.outputs.branch }}
+          commit_sha: ${{ steps.meta.outputs.sha_short }}
+          commit_message: ${{ steps.commit.outputs.message }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build Docker image
+        id: build
+        run: |
+          BUILD_START=$(date +%s)
+          docker build \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/global-sync-service:${{ steps.meta.outputs.image_tag }} \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/global-sync-service:latest \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ steps.meta.outputs.sha_short }} \
+            -f Dockerfile \
+            .
+          BUILD_END=$(date +%s)
+          BUILD_DURATION=$((BUILD_END - BUILD_START))
+          echo "duration=${BUILD_DURATION}s" >> $GITHUB_OUTPUT
+
+      - name: Push Docker images to ACR
+        run: |
+          docker push ${{ env.ACR_NAME }}.azurecr.io/global-sync-service:${{ steps.meta.outputs.image_tag }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/global-sync-service:latest
+
+      - name: Summary
+        run: |
+          echo "### Docker Image Build Completed 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Project**: Global Sync Service" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: `${{ env.ACR_NAME }}.azurecr.io/global-sync-service`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags**: `${{ steps.meta.outputs.image_tag }}`, `latest`" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Duration**: ${{ steps.build.outputs.duration }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify build success
+        if: ${{ success() }}
         uses: petaverse-cloud/pv-github-actions/feishu-notification@main
         with:
           webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
           status: 'success'
-          project_name: 'Global Sync Service DEV Deployment'
-          commit_sha: ${{ needs.build.outputs.image_tag }}
+          project_name: 'Global Sync Service'
+          branch: ${{ steps.meta.outputs.branch }}
+          commit_sha: ${{ steps.meta.outputs.sha_short }}
           commit_message: ${{ steps.commit.outputs.message }}
-          image_info: 'petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}'
+          build_duration: ${{ steps.build.outputs.duration }}
+          image_info: ${{ env.ACR_NAME }}.azurecr.io/global-sync-service:${{ steps.meta.outputs.image_tag }}
+
+      - name: Notify build failure
+        if: ${{ failure() }}
+        uses: petaverse-cloud/pv-github-actions/feishu-notification@main
+        with:
+          webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
+          status: 'failure'
+          project_name: 'Global Sync Service'
+          branch: ${{ steps.meta.outputs.branch }}
+          commit_sha: ${{ steps.meta.outputs.sha_short }}
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
