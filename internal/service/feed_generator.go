@@ -274,7 +274,7 @@ func (f *FeedGenerator) getFeedFromRedis(ctx context.Context, userID int64, feed
 		return nil, "", false, err
 	}
 
-	var items []FeedItem
+	items := make([]FeedItem, 0, len(members))
 	for _, m := range members {
 		postID, ok := m.Member.(int64)
 		if !ok {
@@ -442,7 +442,7 @@ type FeedItem struct {
 }
 
 func (f *FeedGenerator) toFeedItems(ctx context.Context, posts []GlobalIndexPost, _ int64) []FeedItem {
-	var items []FeedItem
+	items := make([]FeedItem, 0, len(posts))
 	for _, p := range posts {
 		item := FeedItem{
 			PostID:         p.PostID,

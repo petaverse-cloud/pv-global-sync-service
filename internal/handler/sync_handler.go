@@ -150,7 +150,9 @@ func (h *SyncHandler) HandleGetPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(post)
+	if err := json.NewEncoder(w).Encode(post); err != nil {
+		h.log.Error("Failed to encode post", logger.Error(err))
+	}
 }
 
 func parseInt64(s string) (int64, error) {
@@ -239,8 +241,10 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 func writeError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"error":   http.StatusText(status),
 		"message": message,
-	})
+	}); err != nil {
+		// Cannot do much here as headers are already sent
+	}
 }
