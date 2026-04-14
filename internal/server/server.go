@@ -207,13 +207,13 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, db *postgres.Manage
 		log.Warn("Readiness check failed: redis", logger.Error(err))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "not ready: redis"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "not ready: redis"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
 
 // Listen starts the HTTP server
