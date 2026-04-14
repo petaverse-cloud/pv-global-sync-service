@@ -13,6 +13,18 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
+// GlobalIndexPost is a simplified post representation from the global index.
+type GlobalIndexPost struct {
+	PostID         int64
+	AuthorID       int64
+	ContentPreview string
+	LikesCount     int
+	CommentsCount  int
+	SharesCount    int
+	ViewsCount     int
+	CreatedAt      time.Time
+}
+
 // GlobalIndexService manages operations on the global_post_index table.
 type GlobalIndexService struct {
 	db  *pgxpool.Pool
@@ -325,7 +337,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 	}
 	defer rows.Close()
 
-	var posts []GlobalIndexPost
+	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
@@ -356,7 +368,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 	}
 	defer rows.Close()
 
-	var posts []GlobalIndexPost
+	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
@@ -388,7 +400,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 	}
 	defer rows.Close()
 
-	var posts []GlobalIndexPost
+	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,

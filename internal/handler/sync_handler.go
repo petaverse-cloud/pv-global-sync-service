@@ -76,10 +76,12 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "accepted",
 		"eventId": event.EventID,
-	})
+	}); err != nil {
+		h.log.Error("Failed to write response", logger.Error(err))
+	}
 }
 
 // HandleCrossSync handles POST /sync/cross-sync from the peer region's sync service.
@@ -111,10 +113,12 @@ func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "accepted",
 		"eventId": event.EventID,
-	})
+	}); err != nil {
+		h.log.Error("Failed to write response", logger.Error(err))
+	}
 }
 
 // HandleGetPost handles GET /index/posts/:postId for querying the global index.

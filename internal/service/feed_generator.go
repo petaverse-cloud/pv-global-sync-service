@@ -458,15 +458,3 @@ func (f *FeedGenerator) toFeedItems(ctx context.Context, posts []GlobalIndexPost
 	}
 	return items
 }
-
-// GlobalIndexPost is a simplified post representation from the global index.
-type GlobalIndexPost struct {
-	PostID         int64
-	AuthorID       int64
-	ContentPreview string
-	LikesCount     int
-	CommentsCount  int
-	SharesCount    int
-	ViewsCount     int
-	CreatedAt      time.Time
-}
