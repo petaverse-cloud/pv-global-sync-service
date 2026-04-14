@@ -218,6 +218,7 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, db *postgres.Manage
 
 // Listen starts the HTTP server
 func (s *Server) Listen(addr string) error {
+	s.httpServer.Addr = addr
 	return s.httpServer.ListenAndServe()
 }
 

@@ -45,9 +45,16 @@ func main() {
 	// Start HTTP server in a goroutine
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.HTTPPort)
-		log.Info("HTTP server listening", logger.String("addr", addr))
+		log.Info("HTTP server starting",
+			logger.String("addr", addr),
+			logger.Int("port", cfg.HTTPPort),
+		)
 		if err := srv.Listen(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatal("Server failed", logger.Error(err))
+			log.Fatal("HTTP server failed",
+				logger.Error(err),
+				logger.String("addr", addr),
+				logger.Int("port", cfg.HTTPPort),
+			)
 		}
 	}()
 

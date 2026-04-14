@@ -60,6 +60,12 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate required fields
+	if event.EventID == "" || event.EventType == "" {
+		writeError(w, http.StatusBadRequest, "missing required fields: eventId and eventType are required")
+		return
+	}
+
 	if err := h.processEvent(r.Context(), &event, "local_api"); err != nil {
 		h.log.Error("Sync handler failed",
 			logger.String("event_id", event.EventID),
@@ -86,6 +92,12 @@ func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
 	var event model.CrossRegionSyncEvent
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	// Validate required fields
+	if event.EventID == "" || event.EventType == "" {
+		writeError(w, http.StatusBadRequest, "missing required fields: eventId and eventType are required")
 		return
 	}
 
