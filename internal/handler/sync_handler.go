@@ -241,10 +241,8 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 func writeError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error":   http.StatusText(status),
 		"message": message,
-	}); err != nil {
-		// Cannot do much here as headers are already sent
-	}
+	})
 }

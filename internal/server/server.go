@@ -183,14 +183,14 @@ func handleHealth(w http.ResponseWriter, r *http.Request, db *postgres.Manager, 
 	if status == "degraded" {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleLiveness is a simple liveness check
 func handleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
 }
 
 // handleReadiness checks if all dependencies are ready
@@ -199,7 +199,7 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, db *postgres.Manage
 		log.Warn("Readiness check failed: database", logger.Error(err))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "not ready: database"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "not ready: database"})
 		return
 	}
 
