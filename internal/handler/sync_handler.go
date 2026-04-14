@@ -187,7 +187,7 @@ func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegion
 
 	if !result.Allowed {
 		h.eventLog.MarkProcessed(ctx, event, "gdpr_denied: "+result.Reason) //nolint:errcheck
-		return nil // Denied is not an error from the caller's perspective
+		return nil                                                          // Denied is not an error from the caller's perspective
 	}
 
 	// Route to handler

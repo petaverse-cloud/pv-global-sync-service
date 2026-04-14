@@ -41,12 +41,12 @@ func NewSyncConsumer(
 // HandleMessage is the RocketMQ consumer callback.
 // It processes a single sync event through the full pipeline:
 //
-//	1. Parse event from JSON
-//	2. Check idempotency (skip if already processed)
-//	3. GDPR compliance check
-//	4. Route to appropriate handler (insert/update/delete)
-//	5. Log audit trail
-//	6. Mark as processed
+//  1. Parse event from JSON
+//  2. Check idempotency (skip if already processed)
+//  3. GDPR compliance check
+//  4. Route to appropriate handler (insert/update/delete)
+//  5. Log audit trail
+//  6. Mark as processed
 func (c *SyncConsumer) HandleMessage(ctx context.Context, msg *primitive.MessageExt) (consumer.ConsumeResult, error) {
 	c.log.Info("Received sync event",
 		logger.String("msg_id", msg.MsgId),

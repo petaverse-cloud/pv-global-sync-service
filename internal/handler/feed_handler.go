@@ -44,7 +44,7 @@ func (h *FeedHandler) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 
 	limit := 20
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+		if n, parseErr := strconv.Atoi(l); parseErr == nil && n > 0 {
 			limit = n
 			if limit > 100 {
 				limit = 100
@@ -76,4 +76,13 @@ func (h *FeedHandler) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error":   http.StatusText(status),
+		"message": message,
+	})
 }

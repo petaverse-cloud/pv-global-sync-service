@@ -27,12 +27,12 @@ import (
 //   - Global feed: 15 minutes
 //   - Trending feed: 1 minute
 type FeedGenerator struct {
-	regionalDB     *postgres.Manager
-	redis          *redispkg.Client
-	indexSvc       *GlobalIndexService
-	log            *logger.Logger
-	pushThreshold  int
-	feedTTLs       map[string]time.Duration
+	regionalDB    *postgres.Manager
+	redis         *redispkg.Client
+	indexSvc      *GlobalIndexService
+	log           *logger.Logger
+	pushThreshold int
+	feedTTLs      map[string]time.Duration
 }
 
 // FeedTTLs returns default cache TTLs for each feed type.
@@ -300,7 +300,7 @@ func (f *FeedGenerator) cacheFeedItems(ctx context.Context, userID int64, feedTy
 	key := redispkg.FeedCacheKey(userID, feedType)
 	f.redis.Rdb().Del(ctx, key)
 
-	members := make([]redis.Z, len(items))
+	members := make([]redis.Z, 0, len(items))
 	for i, item := range items {
 		members[i] = redis.Z{
 			Score:  item.Score,
@@ -316,10 +316,10 @@ func (f *FeedGenerator) cacheFeedItems(ctx context.Context, userID int64, feedTy
 
 // RankingScore represents the components of a post's relevance score.
 type RankingScore struct {
-	Total     float64
-	TimeDecay float64
+	Total      float64
+	TimeDecay  float64
 	Engagement float64
-	Affinity  float64
+	Affinity   float64
 	Preference float64
 }
 
@@ -429,12 +429,12 @@ func (f *FeedGenerator) getFollowingIDs(ctx context.Context, userID int64) ([]in
 
 // FeedItem represents an item in a user's feed response.
 type FeedItem struct {
-	PostID      int64   `json:"postId"`
-	AuthorID    int64   `json:"authorId"`
-	AuthorName  string  `json:"authorName,omitempty"`
-	ContentPreview string `json:"contentPreview,omitempty"`
-	Score       float64 `json:"score"`
-	Engagement  struct {
+	PostID         int64   `json:"postId"`
+	AuthorID       int64   `json:"authorId"`
+	AuthorName     string  `json:"authorName,omitempty"`
+	ContentPreview string  `json:"contentPreview,omitempty"`
+	Score          float64 `json:"score"`
+	Engagement     struct {
 		Likes    int `json:"likes"`
 		Comments int `json:"comments"`
 		Shares   int `json:"shares"`

@@ -25,10 +25,10 @@ const (
 type DataCategory string
 
 const (
-	DataCategoryPII       DataCategory = "TIER_1" // Personal Identifiable Information
-	DataCategoryUGC       DataCategory = "TIER_2" // User Generated Content
-	DataCategorySystem    DataCategory = "TIER_3" // System data
-	DataCategoryMedia     DataCategory = "TIER_4" // Media files
+	DataCategoryPII    DataCategory = "TIER_1" // Personal Identifiable Information
+	DataCategoryUGC    DataCategory = "TIER_2" // User Generated Content
+	DataCategorySystem DataCategory = "TIER_3" // System data
+	DataCategoryMedia  DataCategory = "TIER_4" // Media files
 )
 
 // Region represents deployment region
@@ -63,10 +63,10 @@ type EventPayload struct {
 
 // EventMetadata contains compliance and audit information
 type EventMetadata struct {
-	GDPRCompliant   bool         `json:"gdprCompliant"`
-	UserConsent     bool         `json:"userConsent"`
-	DataCategory    DataCategory `json:"dataCategory"`
-	CrossBorderOK   bool         `json:"crossBorderOk"`
+	GDPRCompliant bool         `json:"gdprCompliant"`
+	UserConsent   bool         `json:"userConsent"`
+	DataCategory  DataCategory `json:"dataCategory"`
+	CrossBorderOK bool         `json:"crossBorderOk"`
 }
 
 // GlobalPostIndex represents a post entry in the global index
@@ -91,10 +91,10 @@ type GlobalPostIndex struct {
 
 // FeedItem represents an item in a user's feed
 type FeedItem struct {
-	UserID    int64   `json:"userId"`
-	PostID    int64   `json:"postId"`
-	FeedType  string  `json:"feedType"` // "following" | "global" | "trending"
-	Score     float64 `json:"score"`
+	UserID    int64     `json:"userId"`
+	PostID    int64     `json:"postId"`
+	FeedType  string    `json:"feedType"` // "following" | "global" | "trending"
+	Score     float64   `json:"score"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt,omitempty"`
 }

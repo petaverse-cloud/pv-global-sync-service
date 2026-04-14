@@ -26,9 +26,9 @@ import (
 //   - FOLLOWERS: Stay in regional DB only
 //   - PRIVATE: Never sync
 type GDPRChecker struct {
-	db      *postgres.Manager
-	redis   *redis.Client
-	log     *logger.Logger
+	db       *postgres.Manager
+	redis    *redis.Client
+	log      *logger.Logger
 	auditSvc *AuditLogService
 }
 
@@ -51,12 +51,12 @@ var (
 
 // Denied results when the event must be rejected.
 var (
-	DeniedPII         = CheckResult{Allowed: false, Reason: "PII data (TIER_1) - never sync"}
-	DeniedPrivate     = CheckResult{Allowed: false, Reason: "private content - cross-region prohibited"}
-	DeniedFollowers   = CheckResult{Allowed: false, Reason: "followers-only content - not global"}
-	DeniedRegional    = CheckResult{Allowed: false, Reason: "regional-only content - not global"}
-	DeniedNoConsent   = CheckResult{Allowed: false, Reason: "user has not consented to cross-border transfer"}
-	DeniedMedia       = CheckResult{Allowed: false, Reason: "media not CDN-ready for cross-region"}
+	DeniedPII       = CheckResult{Allowed: false, Reason: "PII data (TIER_1) - never sync"}
+	DeniedPrivate   = CheckResult{Allowed: false, Reason: "private content - cross-region prohibited"}
+	DeniedFollowers = CheckResult{Allowed: false, Reason: "followers-only content - not global"}
+	DeniedRegional  = CheckResult{Allowed: false, Reason: "regional-only content - not global"}
+	DeniedNoConsent = CheckResult{Allowed: false, Reason: "user has not consented to cross-border transfer"}
+	DeniedMedia     = CheckResult{Allowed: false, Reason: "media not CDN-ready for cross-region"}
 )
 
 // Check evaluates whether a sync event complies with GDPR rules.
