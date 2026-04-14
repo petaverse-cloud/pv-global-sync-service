@@ -1,4 +1,4 @@
-name: Build and Push (Dev)
+name: Build and Deploy
 
 on:
   push:
@@ -112,7 +112,7 @@ jobs:
         run: az logout
 
   update-manifests:
-    name: Update DEV Manifests
+    name: Update Manifests
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -136,9 +136,15 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           sudo mv kustomize /usr/local/bin/
 
-      - name: Update DEV kustomization
+      - name: Update DEV kustomization (devops-sea)
         run: |
           cd pv-k8s-manifests/overlays/devops-sea/wigowago-global-sync
+          kustomize edit set image \
+            petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}
+
+      - name: Update EU kustomization (prod-eu)
+        run: |
+          cd pv-k8s-manifests/overlays/prod-eu/wigowago-global-sync
           kustomize edit set image \
             petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}
 
@@ -149,7 +155,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add overlays/devops-sea/wigowago-global-sync/kustomization.yaml
-          git commit -m "chore(dev): Update global-sync-service image to ${{ needs.build.outputs.image_tag }}" || echo "No changes to commit"
+          git add overlays/prod-eu/wigowago-global-sync/kustomization.yaml
+          git commit -m "chore: Update global-sync-service image to ${{ needs.build.outputs.image_tag }} (DEV + EU)" || echo "No changes to commit"
           git push || echo "No changes to push"
 
       - name: Notify deployment
@@ -157,6 +164,6 @@ jobs:
         with:
           webhook_url: ${{ secrets.FEISHU_WEBHOOK }}
           status: 'success'
-          project_name: 'Global Sync Service DEV Deployment'
+          project_name: 'Global Sync Service (DEV + EU)'
           commit_sha: ${{ needs.build.outputs.image_tag }}
           image_info: 'petaverseacr.azurecr.io/global-sync-service:${{ needs.build.outputs.image_tag }}'
