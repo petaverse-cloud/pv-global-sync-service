@@ -6,9 +6,10 @@ import "time"
 type SyncEventType string
 
 const (
-	EventTypePostCreated SyncEventType = "POST_CREATED"
-	EventTypePostUpdated SyncEventType = "POST_UPDATED"
-	EventTypePostDeleted SyncEventType = "POST_DELETED"
+	EventTypePostCreated      SyncEventType = "POST_CREATED"
+	EventTypePostUpdated      SyncEventType = "POST_UPDATED"
+	EventTypePostDeleted      SyncEventType = "POST_DELETED"
+	EventTypePostStatsUpdated SyncEventType = "POST_STATS_UPDATED"
 )
 
 // Visibility represents post visibility level

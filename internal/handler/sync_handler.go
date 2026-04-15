@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
@@ -23,6 +24,7 @@ type SyncHandler struct {
 	indexSvc      *service.GlobalIndexService
 	auditSvc      *service.AuditLogService
 	feedGenerator *service.FeedGenerator
+	regionalDB    *pgxpool.Pool
 	log           *logger.Logger
 }
 
@@ -34,6 +36,7 @@ func NewSyncHandler(
 	indexSvc *service.GlobalIndexService,
 	auditSvc *service.AuditLogService,
 	feedGenerator *service.FeedGenerator,
+	regionalDB *pgxpool.Pool,
 	log *logger.Logger,
 ) *SyncHandler {
 	return &SyncHandler{
@@ -43,6 +46,7 @@ func NewSyncHandler(
 		indexSvc:      indexSvc,
 		auditSvc:      auditSvc,
 		feedGenerator: feedGenerator,
+		regionalDB:    regionalDB,
 		log:           log,
 	}
 }
@@ -233,9 +237,36 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 				logger.Error(err))
 		}
 		return nil
+	case model.EventTypePostStatsUpdated:
+		return h.handleStatsUpdated(ctx, event)
 	default:
 		return nil
 	}
+}
+
+// handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
+func (h *SyncHandler) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
+	postID := event.Payload.PostID
+
+	var likes, comments, shares, views int
+	query := `SELECT likes_count, comments_count, shares_count, views_count FROM posts WHERE post_id = $1`
+	err := h.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &shares, &views)
+	if err != nil {
+		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
+	}
+
+	if err := h.indexSvc.UpdateStats(ctx, postID, likes, comments, shares, views); err != nil {
+		return fmt.Errorf("update stats for post %d in global index: %w", postID, err)
+	}
+
+	h.log.Info("Post stats updated in global index",
+		logger.Int64("post_id", postID),
+		logger.Int("likes", likes),
+		logger.Int("comments", comments),
+		logger.Int("shares", shares),
+		logger.Int("views", views))
+
+	return nil
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

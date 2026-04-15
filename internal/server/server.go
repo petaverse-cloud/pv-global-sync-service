@@ -96,11 +96,11 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	)
 
 	syncConsumer := consumer.NewSyncConsumer(
-		eventLogSvc, gdprChecker, indexSvc, auditSvc, log,
+		eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), log,
 	)
 
 	syncHandler := handler.NewSyncHandler(
-		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, log,
+		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), log,
 	)
 
 	feedHandler := handler.NewFeedHandler(feedGenerator, log)

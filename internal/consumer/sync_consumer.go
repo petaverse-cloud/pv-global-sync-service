@@ -3,9 +3,11 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
@@ -14,11 +16,13 @@ import (
 
 // SyncConsumer processes sync events from RocketMQ.
 type SyncConsumer struct {
-	eventLog    *service.SyncEventLogService
-	gdprChecker *service.GDPRChecker
-	indexSvc    *service.GlobalIndexService
-	auditSvc    *service.AuditLogService
-	log         *logger.Logger
+	eventLog      *service.SyncEventLogService
+	gdprChecker   *service.GDPRChecker
+	indexSvc      *service.GlobalIndexService
+	auditSvc      *service.AuditLogService
+	feedGenerator *service.FeedGenerator
+	regionalDB    *pgxpool.Pool
+	log           *logger.Logger
 }
 
 // NewSyncConsumer creates a new sync event consumer.
@@ -27,14 +31,18 @@ func NewSyncConsumer(
 	gdprChecker *service.GDPRChecker,
 	indexSvc *service.GlobalIndexService,
 	auditSvc *service.AuditLogService,
+	feedGenerator *service.FeedGenerator,
+	regionalDB *pgxpool.Pool,
 	log *logger.Logger,
 ) *SyncConsumer {
 	return &SyncConsumer{
-		eventLog:    eventLog,
-		gdprChecker: gdprChecker,
-		indexSvc:    indexSvc,
-		auditSvc:    auditSvc,
-		log:         log,
+		eventLog:      eventLog,
+		gdprChecker:   gdprChecker,
+		indexSvc:      indexSvc,
+		auditSvc:      auditSvc,
+		feedGenerator: feedGenerator,
+		regionalDB:    regionalDB,
+		log:           log,
 	}
 }
 
@@ -132,7 +140,16 @@ func (c *SyncConsumer) HandleMessage(ctx context.Context, msg *primitive.Message
 func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	switch event.EventType {
 	case model.EventTypePostCreated:
-		return c.indexSvc.InsertPost(ctx, event)
+		if err := c.indexSvc.InsertPost(ctx, event); err != nil {
+			return err
+		}
+		// Trigger feed generation after successful insert
+		if err := c.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorID, event.Payload.PostID); err != nil {
+			c.log.Error("Feed generation failed, but post was synced",
+				logger.Int64("post_id", event.Payload.PostID),
+				logger.Error(err))
+		}
+		return nil
 
 	case model.EventTypePostUpdated:
 		return c.indexSvc.UpdatePost(ctx, event)
@@ -140,10 +157,38 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 	case model.EventTypePostDeleted:
 		return c.indexSvc.DeletePost(ctx, event)
 
+	case model.EventTypePostStatsUpdated:
+		return c.handleStatsUpdated(ctx, event)
+
 	default:
 		c.log.Warn("Unknown event type, skipping",
 			logger.String("event_type", string(event.EventType)),
 			logger.String("event_id", event.EventID))
 		return nil
 	}
+}
+
+// handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
+func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
+	postID := event.Payload.PostID
+
+	var likes, comments, shares, views int
+	query := `SELECT likes_count, comments_count, shares_count, views_count FROM posts WHERE post_id = $1`
+	err := c.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &shares, &views)
+	if err != nil {
+		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
+	}
+
+	if err := c.indexSvc.UpdateStats(ctx, postID, likes, comments, shares, views); err != nil {
+		return fmt.Errorf("update stats for post %d in global index: %w", postID, err)
+	}
+
+	c.log.Info("Post stats updated in global index",
+		logger.Int64("post_id", postID),
+		logger.Int("likes", likes),
+		logger.Int("comments", comments),
+		logger.Int("shares", shares),
+		logger.Int("views", views))
+
+	return nil
 }
