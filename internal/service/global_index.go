@@ -166,12 +166,13 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 
 	var post model.GlobalPostIndex
 	var createdAt, syncedAt time.Time
-	var hashtags, mentions, mediaURLs pgtypeArray
+	var hashtags, mentions pgtypeArray
+	var mediaURLsRaw []byte
 
 	err := s.db.QueryRow(ctx, query, postID).Scan(
 		&post.PostID, &post.AuthorID, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
-		&hashtags, &mentions, &mediaURLs,
+		&hashtags, &mentions, &mediaURLsRaw,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
 		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
 		&createdAt, &syncedAt,
@@ -185,7 +186,11 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 
 	post.CreatedAt = createdAt
 	post.SyncedAt = syncedAt
-	post.MediaURLs = mediaURLs
+
+	// Parse media_urls from PostgreSQL TEXT[] format
+	if len(mediaURLsRaw) > 0 {
+		post.MediaURLs = parseTextArray(string(mediaURLsRaw))
+	}
 
 	return &post, nil
 }
@@ -415,4 +420,34 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 		posts = append(posts, p)
 	}
 	return posts, rows.Err()
+}
+
+// parseTextArray parses a PostgreSQL TEXT[] string like "{url1,url2}" into []string.
+func parseTextArray(s string) []string {
+    if len(s) < 2 || s[0] != '{' || s[len(s)-1] != '}' {
+        return []string{s}
+    }
+    inner := s[1 : len(s)-1]
+    if inner == "" {
+        return []string{}
+    }
+    // Simple comma-separated parse (handles URLs without commas)
+    var parts []string
+    var current []byte
+    inQuote := false
+    for i := 0; i < len(inner); i++ {
+        ch := inner[i]
+        if ch == '"' {
+            inQuote = !inQuote
+        } else if ch == ',' && !inQuote {
+            parts = append(parts, string(current))
+            current = nil
+        } else {
+            current = append(current, ch)
+        }
+    }
+    if len(current) > 0 {
+        parts = append(parts, string(current))
+    }
+    return parts
 }
