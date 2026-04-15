@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -158,7 +159,8 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, like
 func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.GlobalPostIndex, error) {
 	query := `
 		SELECT post_id, author_id, author_region, content_preview, visibility,
-		       hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
+		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
+		       likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at
 		FROM global_post_index
 		WHERE post_id = $1
@@ -167,12 +169,12 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 	var post model.GlobalPostIndex
 	var createdAt, syncedAt time.Time
 	var hashtags, mentions pgtypeArray
-	var mediaURLsRaw []byte
+	var mediaURLsStr string
 
 	err := s.db.QueryRow(ctx, query, postID).Scan(
 		&post.PostID, &post.AuthorID, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
-		&hashtags, &mentions, &mediaURLsRaw,
+		&hashtags, &mentions, &mediaURLsStr,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
 		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
 		&createdAt, &syncedAt,
@@ -187,9 +189,9 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 	post.CreatedAt = createdAt
 	post.SyncedAt = syncedAt
 
-	// Parse media_urls from PostgreSQL TEXT[] format
-	if len(mediaURLsRaw) > 0 {
-		post.MediaURLs = parseTextArray(string(mediaURLsRaw))
+	// Parse media_urls from comma-separated string
+	if mediaURLsStr != "" {
+		post.MediaURLs = strings.Split(mediaURLsStr, ",")
 	}
 
 	return &post, nil
