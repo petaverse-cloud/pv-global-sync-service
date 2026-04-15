@@ -300,7 +300,7 @@ func (f *FeedGenerator) cacheFeedItems(ctx context.Context, userID int64, feedTy
 	key := redispkg.FeedCacheKey(userID, feedType)
 	f.redis.Rdb().Del(ctx, key)
 
-	members := make([]redis.Z, 0, len(items))
+	members := make([]redis.Z, len(items))
 	for i, item := range items {
 		members[i] = redis.Z{
 			Score:  item.Score,
