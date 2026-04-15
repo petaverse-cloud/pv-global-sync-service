@@ -172,14 +172,15 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	postID := event.Payload.PostID
 
-	var likes, comments, shares, views int
-	query := `SELECT likes_count, comments_count, shares_count, views_count FROM posts WHERE post_id = $1`
-	err := c.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &shares, &views)
+	var likes, comments, favorites, views int
+	// Note: Regional DB has favorites_count, not shares_count
+	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE post_id = $1`
+	err := c.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &favorites, &views)
 	if err != nil {
 		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
 	}
 
-	if err := c.indexSvc.UpdateStats(ctx, postID, likes, comments, shares, views); err != nil {
+	if err := c.indexSvc.UpdateStats(ctx, postID, likes, comments, favorites, views); err != nil {
 		return fmt.Errorf("update stats for post %d in global index: %w", postID, err)
 	}
 
@@ -187,7 +188,7 @@ func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.Cros
 		logger.Int64("post_id", postID),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
-		logger.Int("shares", shares),
+		logger.Int("favorites", favorites),
 		logger.Int("views", views))
 
 	return nil
