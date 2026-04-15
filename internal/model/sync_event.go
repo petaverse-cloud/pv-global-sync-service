@@ -79,6 +79,7 @@ type GlobalPostIndex struct {
 	Visibility     string    `json:"visibility"`
 	Hashtags       []string  `json:"hashtags,omitempty"`
 	Mentions       []int64   `json:"mentions,omitempty"`
+	MediaURLs      []string  `json:"mediaUrls,omitempty"`
 	LikesCount     int       `json:"likesCount"`
 	CommentsCount  int       `json:"commentsCount"`
 	SharesCount    int       `json:"sharesCount"`

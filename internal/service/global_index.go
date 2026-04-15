@@ -43,12 +43,12 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 	query := `
 		INSERT INTO global_post_index (
 			post_id, author_id, author_region, content_preview, visibility,
-			hashtags, mentions, likes_count, comments_count, shares_count, views_count,
+			hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
 			gdpr_compliant, user_consent, data_category, created_at, synced_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, $7, 0, 0, 0, 0,
-			$8, $9, $10, $11, $12
+			$6, $7, $8, 0, 0, 0, 0,
+			$9, $10, $11, $12, $13
 		)
 		ON CONFLICT (post_id) DO NOTHING
 	`
@@ -62,6 +62,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		event.Payload.Visibility,
 		hashtags,
 		[]int64{}, // Mentions populated separately when available
+		event.Payload.MediaURLs,
 		event.Metadata.GDPRCompliant,
 		event.Metadata.UserConsent,
 		event.Metadata.DataCategory,
@@ -89,9 +90,10 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 		SET content_preview = $1,
 			visibility = $2,
 			hashtags = $3,
+			media_urls = $4,
 			updated_at = NOW(),
 			synced_at = NOW()
-		WHERE post_id = $4
+		WHERE post_id = $5
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
@@ -99,6 +101,7 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 		truncatePreview(event.Payload.Content, 500),
 		event.Payload.Visibility,
 		hashtags,
+		event.Payload.MediaURLs,
 		event.Payload.PostID,
 	)
 	if err != nil {
@@ -155,7 +158,7 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, like
 func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.GlobalPostIndex, error) {
 	query := `
 		SELECT post_id, author_id, author_region, content_preview, visibility,
-		       hashtags, mentions, likes_count, comments_count, shares_count, views_count,
+		       hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at
 		FROM global_post_index
 		WHERE post_id = $1
@@ -163,12 +166,12 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 
 	var post model.GlobalPostIndex
 	var createdAt, syncedAt time.Time
-	var hashtags, mentions pgtypeArray
+	var hashtags, mentions, mediaURLs pgtypeArray
 
 	err := s.db.QueryRow(ctx, query, postID).Scan(
 		&post.PostID, &post.AuthorID, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
-		&hashtags, &mentions,
+		&hashtags, &mentions, &mediaURLs,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
 		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
 		&createdAt, &syncedAt,
@@ -182,6 +185,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 
 	post.CreatedAt = createdAt
 	post.SyncedAt = syncedAt
+	post.MediaURLs = mediaURLs
 
 	return &post, nil
 }
