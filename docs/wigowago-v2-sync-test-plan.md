@@ -300,12 +300,11 @@ Stats sync, publish/unpublish, permanent delete, consumer feed 全部通过。
 - Global Sync Service: 70 tests (新增 24)
 - Wigowago API: 31 tests (新增 12)
 
-### Round 5: 待执行 ⬜
-- D4.10: EU → DEVOPS 反向同步
-- D5.7-5.10: CDN 跨区域访问验证
-- D6.4-6.5: Migration 边界测试
-- D7.1-7.5: API 合并读取 E2E 验证
-- Part B/C: 媒体上传 + 全 API 接口测试
+### Round 5: API 全接口覆盖 ✅ (90% — 66/73 PASS)
+- Part B: 媒体上传 (真实图片/视频) — 5/5 ✅
+- Part C: 全 API 接口 — 53/60 ✅
+- Part D: Global Sync E2E — 8/8 ✅
+- 剩余 7 个失败需排查: D1.2 update sync, rewards/reports/tips body format, tags categories, places
 
 ---
 
