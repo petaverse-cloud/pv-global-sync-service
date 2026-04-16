@@ -84,3 +84,77 @@ func TestLoadDefaults(t *testing.T) {
 
 	os.Unsetenv("REGION")
 }
+
+func TestParsePeerURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"empty", "", []string{}},
+		{"single", "https://sea.example.com", []string{"https://sea.example.com"}},
+		{"multiple", "https://sea.example.com,https://eu.example.com", []string{"https://sea.example.com", "https://eu.example.com"}},
+		{"with spaces", " https://sea.example.com , https://eu.example.com ", []string{"https://sea.example.com", "https://eu.example.com"}},
+		{"trailing comma", "https://sea.example.com,", []string{"https://sea.example.com"}},
+		{"empty entries", ",,https://sea.example.com,,", []string{"https://sea.example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parsePeerURLs(tt.raw)
+			if len(got) != len(tt.want) {
+				t.Errorf("parsePeerURLs(%q) len = %d, want %d", tt.raw, len(got), len(tt.want))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("parsePeerURLs(%q)[%d] = %q, want %q", tt.raw, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestLoadPeerURLs(t *testing.T) {
+	os.Setenv("REGION", "na")
+	os.Setenv("REGIONAL_DB_HOST", "db.example.com")
+	os.Setenv("GLOBAL_INDEX_DB_HOST", "idx.example.com")
+	os.Setenv("REDIS_HOST", "redis.example.com")
+	os.Setenv("ROCKETMQ_NAME_SERVER", "mq.example.com:9876")
+
+	tests := []struct {
+		name string
+		val  string
+		want []string
+	}{
+		{"none", "", []string{}},
+		{"single", "https://sea.example.com", []string{"https://sea.example.com"}},
+		{"multiple", "https://sea.example.com,https://eu.example.com", []string{"https://sea.example.com", "https://eu.example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("PEER_URLS", tt.val)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if len(cfg.CrossSyncPeerURLs) != len(tt.want) {
+				t.Errorf("PeerURLs len = %d, want %d", len(cfg.CrossSyncPeerURLs), len(tt.want))
+			}
+			for i := range tt.want {
+				if cfg.CrossSyncPeerURLs[i] != tt.want[i] {
+					t.Errorf("PeerURLs[%d] = %q, want %q", i, cfg.CrossSyncPeerURLs[i], tt.want[i])
+				}
+			}
+		})
+	}
+
+	// Clean up
+	os.Unsetenv("REGION")
+	os.Unsetenv("REGIONAL_DB_HOST")
+	os.Unsetenv("GLOBAL_INDEX_DB_HOST")
+	os.Unsetenv("REDIS_HOST")
+	os.Unsetenv("ROCKETMQ_NAME_SERVER")
+	os.Unsetenv("PEER_URLS")
+}

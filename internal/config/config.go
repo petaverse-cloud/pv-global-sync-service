@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,9 +46,10 @@ type Config struct {
 	RocketMQTopic      string
 	RocketMQConsumer   string
 
-	// Cross-region sync
-	CrossSyncPeerURL string // URL of the peer region's sync service
-	CrossSyncTimeout time.Duration
+	// Cross-region sync (multi-cluster)
+	CrossSyncPeerURL  string          // Deprecated: use CrossSyncPeerURLs
+	CrossSyncPeerURLs []string        // Comma-separated peer URLs (e.g. "https://sea-sync.example.com,https://eu-sync.example.com")
+	CrossSyncTimeout  time.Duration
 
 	// Feed generation
 	FeedPushThreshold int // follower count threshold for push vs pull mode
@@ -92,8 +94,9 @@ func Load() (*Config, error) {
 		RocketMQConsumer:   getEnv("ROCKETMQ_CONSUMER", "sync-consumer"),
 
 		// Cross-region sync
-		CrossSyncPeerURL: getEnv("CROSS_SYNC_PEER_URL", ""),
-		CrossSyncTimeout: getEnvDuration("CROSS_SYNC_TIMEOUT", 10*time.Second),
+		CrossSyncPeerURL:  getEnv("CROSS_SYNC_PEER_URL", ""),
+		CrossSyncPeerURLs: parsePeerURLs(getEnv("PEER_URLS", "")),
+		CrossSyncTimeout:  getEnvDuration("CROSS_SYNC_TIMEOUT", 10*time.Second),
 
 		// Feed generation
 		FeedPushThreshold: getEnvInt("FEED_PUSH_THRESHOLD", 1000),
@@ -143,4 +146,19 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 		return defaultVal
 	}
 	return d
+}
+
+// parsePeerURLs parses a comma-separated list of peer URLs.
+func parsePeerURLs(raw string) []string {
+	if raw == "" {
+		return []string{}
+	}
+	var urls []string
+	for _, u := range strings.Split(raw, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			urls = append(urls, u)
+		}
+	}
+	return urls
 }

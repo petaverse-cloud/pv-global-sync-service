@@ -13,7 +13,9 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/config"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/handler"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/peer"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/sync"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/postgres"
 	redispkg "github.com/petaverse-cloud/pv-global-sync-service/pkg/redis"
@@ -38,9 +40,13 @@ type Server struct {
 	FeedGenerator *service.FeedGenerator
 
 	// Consumers/Handlers
-	SyncConsumer *consumer.SyncConsumer
-	SyncHandler  *handler.SyncHandler
-	FeedHandler  *handler.FeedHandler
+	SyncConsumer  *consumer.SyncConsumer
+	SyncHandler   *handler.SyncHandler
+	FeedHandler   *handler.FeedHandler
+
+	// Multi-cluster peer management
+	PeerManager     *peer.PeerManager
+	CrossSyncService *sync.CrossSyncService
 }
 
 // New creates a new server with all dependencies initialized
@@ -99,8 +105,23 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), log,
 	)
 
+	// --- Multi-cluster Peer Management ---
+	peerURLs := cfg.CrossSyncPeerURLs
+	if len(peerURLs) == 0 && cfg.CrossSyncPeerURL != "" {
+		peerURLs = []string{cfg.CrossSyncPeerURL}
+	}
+	pm := peer.NewPeerManager(peerURLs, cfg.CrossSyncTimeout)
+	crossSyncSvc := sync.NewCrossSyncService(pm, cfg.CrossSyncTimeout, log)
+
+	if len(peerURLs) > 0 {
+		log.Info("Multi-cluster peer sync enabled",
+			logger.Any("peers", peerURLs))
+	} else {
+		log.Info("No peer URLs configured, multi-cluster sync disabled")
+	}
+
 	syncHandler := handler.NewSyncHandler(
-		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), log,
+		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), crossSyncSvc, log,
 	)
 
 	feedHandler := handler.NewFeedHandler(feedGenerator, log)
@@ -128,6 +149,8 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		SyncConsumer:  syncConsumer,
 		SyncHandler:   syncHandler,
 		FeedHandler:   feedHandler,
+		PeerManager:   pm,
+		CrossSyncService: crossSyncSvc,
 		httpServer: &http.Server{
 			Handler:           r,
 			ReadHeaderTimeout: 10 * time.Second,

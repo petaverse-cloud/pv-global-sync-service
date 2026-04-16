@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +14,7 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/sync"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
@@ -25,6 +27,7 @@ type SyncHandler struct {
 	auditSvc      *service.AuditLogService
 	feedGenerator *service.FeedGenerator
 	regionalDB    *pgxpool.Pool
+	crossSync     *sync.CrossSyncService
 	log           *logger.Logger
 }
 
@@ -37,6 +40,7 @@ func NewSyncHandler(
 	auditSvc *service.AuditLogService,
 	feedGenerator *service.FeedGenerator,
 	regionalDB *pgxpool.Pool,
+	crossSync *sync.CrossSyncService,
 	log *logger.Logger,
 ) *SyncHandler {
 	return &SyncHandler{
@@ -47,6 +51,7 @@ func NewSyncHandler(
 		auditSvc:      auditSvc,
 		feedGenerator: feedGenerator,
 		regionalDB:    regionalDB,
+		crossSync:     crossSync,
 		log:           log,
 	}
 }
@@ -207,6 +212,16 @@ func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegion
 	}
 
 	h.eventLog.MarkProcessed(ctx, event, "") //nolint:errcheck
+
+	// Broadcast to peer clusters (fire-and-forget, only for local API events)
+	if source == "local_api" && h.crossSync != nil {
+		go func() {
+			bctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			h.crossSync.Broadcast(bctx, event)
+		}()
+	}
+
 	return nil
 }
 
