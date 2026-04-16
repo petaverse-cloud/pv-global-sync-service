@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/sync"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
+	"github.com/petaverse-cloud/pv-global-sync-service/pkg/migrate"
+	"github.com/petaverse-cloud/pv-global-sync-service/pkg/migrations"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/postgres"
 	redispkg "github.com/petaverse-cloud/pv-global-sync-service/pkg/redis"
 )
@@ -77,6 +80,34 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		return nil, err
 	}
 	log.Info("PostgreSQL connected")
+
+	// --- Auto-Migration ---
+	log.Info("Running database migrations...")
+	regionalM := migrate.New(migrations.RegionalFS, "regional", "regional")
+	regionalApplied, err := regionalM.Run(ctx, db.RegionalDB())
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("regional db migration: %w", err)
+	}
+	if len(regionalApplied) > 0 {
+		log.Info("Regional DB migrations applied",
+			logger.Any("migrations", regionalApplied))
+	} else {
+		log.Info("Regional DB is up to date")
+	}
+
+	indexM := migrate.New(migrations.GlobalIndexFS, "global_index", "global-index")
+	indexApplied, err := indexM.Run(ctx, db.GlobalIndex())
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("global index db migration: %w", err)
+	}
+	if len(indexApplied) > 0 {
+		log.Info("Global Index DB migrations applied",
+			logger.Any("migrations", indexApplied))
+	} else {
+		log.Info("Global Index DB is up to date")
+	}
 
 	log.Info("Connecting to Redis...")
 	redis, err := redispkg.New(ctx, redispkg.Config{
