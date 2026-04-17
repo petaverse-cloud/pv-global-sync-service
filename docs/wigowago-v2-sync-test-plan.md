@@ -300,12 +300,13 @@ Stats sync, publish/unpublish, permanent delete, consumer feed 全部通过。
 - Global Sync Service: 70 tests (新增 24)
 - Wigowago API: 31 tests (新增 12)
 
-### Round 5: API 全接口覆盖 ✅ (100% — 73/73 PASS)
+### Round 5: API 全接口覆盖 ✅ (99% — 106/107 PASS)
 - Part B: 媒体上传 (真实图片/视频) — 5/5 ✅
-- Part C: 全 API 接口 — 60/60 ✅
+- Part C: 全 API 接口 — 93/94 ✅ (1 skip: users/:id/profile 路由不存在)
 - Part D: Global Sync E2E — 8/8 ✅
-- 修复: tag router 路由排序 bug, Content-Type header 缺失, 测试 body 格式
-- 已知: tags/categories 路由修复已提交但未部署; tips 端点单用户测试返回 404 (业务规则: 不能给自己打赏)
+- 新增 34 个补充测试用例: Users 搜索/lookup, Follow 关系, Pets 查询, Posts 评论/提及/标签/状态, Groups 成员/邀请
+- 修复: tag router + pet router 路由排序 bug
+- 已知: tags/categories 路由修复已提交但未部署
 
 ---
 
