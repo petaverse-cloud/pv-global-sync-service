@@ -163,7 +163,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	registerRoutes(r, db, redis, syncHandler, feedHandler, log)
+	registerRoutes(r, db, redis, syncHandler, feedHandler, indexSvc, log)
 
 	s := &Server{
 		cfg:    cfg,
@@ -192,7 +192,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 }
 
 // registerRoutes sets up all HTTP routes
-func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, log *logger.Logger) {
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, indexSvc *service.GlobalIndexService, log *logger.Logger) {
 	// Health checks
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		handleHealth(w, req, db, redis, log)
