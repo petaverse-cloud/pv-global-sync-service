@@ -16,11 +16,11 @@ import (
 
 // CrossSyncService broadcasts sync events to all peer Global Sync services.
 type CrossSyncService struct {
-	pm       *peer.PeerManager
-	client   *http.Client
-	log      *logger.Logger
-	mu       sync.RWMutex
-	sent     map[string]bool // eventID -> sent (for idempotency tracking)
+	pm     *peer.PeerManager
+	client *http.Client
+	log    *logger.Logger
+	mu     sync.RWMutex
+	sent   map[string]bool // eventID -> sent (for idempotency tracking)
 }
 
 // NewCrossSyncService creates a new CrossSyncService.
@@ -123,7 +123,7 @@ func (s *CrossSyncService) sendToPeer(ctx context.Context, peerURL string, event
 	defer resp.Body.Close()
 
 	// Drain body to free connection
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		s.pm.MarkHealthy(peerURL)

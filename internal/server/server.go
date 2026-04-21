@@ -43,12 +43,12 @@ type Server struct {
 	FeedGenerator *service.FeedGenerator
 
 	// Consumers/Handlers
-	SyncConsumer  *consumer.SyncConsumer
-	SyncHandler   *handler.SyncHandler
-	FeedHandler   *handler.FeedHandler
+	SyncConsumer *consumer.SyncConsumer
+	SyncHandler  *handler.SyncHandler
+	FeedHandler  *handler.FeedHandler
 
 	// Multi-cluster peer management
-	PeerManager     *peer.PeerManager
+	PeerManager      *peer.PeerManager
 	CrossSyncService *sync.CrossSyncService
 }
 
@@ -172,15 +172,15 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		DB:     db,
 		Redis:  redis,
 
-		IndexSvc:      indexSvc,
-		AuditSvc:      auditSvc,
-		EventLogSvc:   eventLogSvc,
-		GDPRChecker:   gdprChecker,
-		FeedGenerator: feedGenerator,
-		SyncConsumer:  syncConsumer,
-		SyncHandler:   syncHandler,
-		FeedHandler:   feedHandler,
-		PeerManager:   pm,
+		IndexSvc:         indexSvc,
+		AuditSvc:         auditSvc,
+		EventLogSvc:      eventLogSvc,
+		GDPRChecker:      gdprChecker,
+		FeedGenerator:    feedGenerator,
+		SyncConsumer:     syncConsumer,
+		SyncHandler:      syncHandler,
+		FeedHandler:      feedHandler,
+		PeerManager:      pm,
 		CrossSyncService: crossSyncSvc,
 		httpServer: &http.Server{
 			Handler:           r,

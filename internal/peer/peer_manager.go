@@ -9,10 +9,10 @@ import (
 
 // PeerStatus tracks the health of a peer.
 type PeerStatus struct {
-	URL        string
-	Healthy    bool
-	LastCheck  time.Time
-	FailCount  int
+	URL       string
+	Healthy   bool
+	LastCheck time.Time
+	FailCount int
 }
 
 // PeerManager manages a list of peer Global Sync services with health checking.

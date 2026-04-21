@@ -47,8 +47,8 @@ type Config struct {
 	RocketMQConsumer   string
 
 	// Cross-region sync (multi-cluster)
-	CrossSyncPeerURL  string          // Deprecated: use CrossSyncPeerURLs
-	CrossSyncPeerURLs []string        // Comma-separated peer URLs (e.g. "https://sea-sync.example.com,https://eu-sync.example.com")
+	CrossSyncPeerURL  string   // Deprecated: use CrossSyncPeerURLs
+	CrossSyncPeerURLs []string // Comma-separated peer URLs (e.g. "https://sea-sync.example.com,https://eu-sync.example.com")
 	CrossSyncTimeout  time.Duration
 
 	// Feed generation

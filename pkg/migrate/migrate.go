@@ -55,7 +55,7 @@ func (r *Runner) Run(ctx context.Context, pool *pgxpool.Pool) ([]string, error) 
 		return nil, fmt.Errorf("list migration files: %w", err)
 	}
 
-	var appliedThisRun []string
+	appliedThisRun := make([]string, 0, len(files))
 	for _, f := range files {
 		if applied[f.version] {
 			continue
@@ -127,7 +127,7 @@ func (r *Runner) getMigrationFiles() ([]migrationFile, error) {
 		return nil, err
 	}
 
-	var files []migrationFile
+	files := make([]migrationFile, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue

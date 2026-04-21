@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -113,7 +114,7 @@ func TestToFeedItems_EmptyPosts(t *testing.T) {
 	// without panicking, even when called on a nil FeedGenerator (the method
 	// body never executes the loop, and CalculateScore does not dereceive the receiver).
 	var fg *FeedGenerator
-	items := fg.toFeedItems(nil, []GlobalIndexPost{}, 0)
+	items := fg.toFeedItems(context.Background(), []GlobalIndexPost{}, 0)
 
 	if items == nil {
 		t.Fatal("toFeedItems returned nil for empty posts, expected empty slice")
@@ -152,7 +153,7 @@ func TestToFeedItems_ZeroCounts(t *testing.T) {
 		},
 	}
 
-	items := fg.toFeedItems(nil, posts, 0)
+	items := fg.toFeedItems(context.Background(), posts, 0)
 
 	if len(items) != 2 {
 		t.Fatalf("toFeedItems returned %d items, want 2", len(items))
