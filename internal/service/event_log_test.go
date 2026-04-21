@@ -277,10 +277,10 @@ func TestParseEvent_FieldVerification(t *testing.T) {
 
 func TestParseEvent_MediaURLs(t *testing.T) {
 	tests := []struct {
-		name            string
-		body            string
-		wantMediaURLs   []string
-		wantMediaLen    int
+		name          string
+		body          string
+		wantMediaURLs []string
+		wantMediaLen  int
 	}{
 		{
 			name: "multiple media URLs",

@@ -95,7 +95,7 @@ func TestBroadcast_Non2xxResponseCodes(t *testing.T) {
 		statusCode int
 		wantCount  int
 	}{
-		{"200 OK", http.StatusOK, 1},            // 200 counts as successful delivery
+		{"200 OK", http.StatusOK, 1}, // 200 counts as successful delivery
 		{"201 Created", http.StatusCreated, 1},
 		{"202 Accepted", http.StatusAccepted, 1},
 		{"400 Bad Request", http.StatusBadRequest, 0},
