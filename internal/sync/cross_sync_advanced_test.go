@@ -2,8 +2,12 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -296,4 +300,180 @@ func TestBroadcast_EventWithMediaUrls(t *testing.T) {
 
 	// Verify received body contains mediaUrls
 	_ = receivedBody // just ensuring the variable is used
+}
+
+func TestBroadcast_ContentTypeHeader(t *testing.T) {
+	var gotContentType string
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sync/cross-sync" {
+			mu.Lock()
+			gotContentType = r.Header.Get("Content-Type")
+			mu.Unlock()
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer server.Close()
+
+	pm := peer.NewPeerManager([]string{server.URL}, 100*time.Millisecond)
+	svc := NewCrossSyncService(pm, 100*time.Millisecond, newTestLogger())
+
+	count := svc.Broadcast(context.Background(), testEvent("content_type_test"))
+	if count != 1 {
+		t.Errorf("Broadcast() = %d, want 1", count)
+	}
+
+	if gotContentType != "application/json" {
+		t.Errorf("Content-Type header = %q, want %q", gotContentType, "application/json")
+	}
+}
+
+func TestBroadcast_POSTBodyContainsCorrectJSON(t *testing.T) {
+	var rawBody []byte
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sync/cross-sync" {
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("failed to read body: %v", err)
+				return
+			}
+			mu.Lock()
+			rawBody = b
+			mu.Unlock()
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer server.Close()
+
+	pm := peer.NewPeerManager([]string{server.URL}, 100*time.Millisecond)
+	svc := NewCrossSyncService(pm, 100*time.Millisecond, newTestLogger())
+
+	expected := testEvent("json_body_test")
+	count := svc.Broadcast(context.Background(), expected)
+	if count != 1 {
+		t.Errorf("Broadcast() = %d, want 1", count)
+	}
+
+	if len(rawBody) == 0 {
+		t.Fatal("request body is empty")
+	}
+
+	var received model.CrossRegionSyncEvent
+	if err := json.Unmarshal(rawBody, &received); err != nil {
+		t.Fatalf("failed to unmarshal body as JSON: %v\nraw: %s", err, string(rawBody))
+	}
+
+	if received.EventID != expected.EventID {
+		t.Errorf("body EventID = %q, want %q", received.EventID, expected.EventID)
+	}
+	if received.EventType != expected.EventType {
+		t.Errorf("body EventType = %q, want %q", received.EventType, expected.EventType)
+	}
+	if received.SourceRegion != expected.SourceRegion {
+		t.Errorf("body SourceRegion = %q, want %q", received.SourceRegion, expected.SourceRegion)
+	}
+	if received.Payload.PostID != expected.Payload.PostID {
+		t.Errorf("body Payload.PostID = %d, want %d", received.Payload.PostID, expected.Payload.PostID)
+	}
+	if received.Payload.Content != expected.Payload.Content {
+		t.Errorf("body Payload.Content = %q, want %q", received.Payload.Content, expected.Payload.Content)
+	}
+	if !received.Metadata.GDPRCompliant {
+		t.Error("body Metadata.GDPRCompliant = false, want true")
+	}
+}
+
+func TestBroadcast_ConcurrentDifferentEvents(t *testing.T) {
+	// Use two separate servers so we can verify per-peer delivery
+	var receivedA, receivedB atomic.Int32
+
+	serverA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sync/cross-sync" {
+			receivedA.Add(1)
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer serverA.Close()
+
+	serverB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sync/cross-sync" {
+			receivedB.Add(1)
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer serverB.Close()
+
+	pm := peer.NewPeerManager([]string{serverA.URL, serverB.URL}, 100*time.Millisecond)
+	svc := NewCrossSyncService(pm, 100*time.Millisecond, newTestLogger())
+
+	numGoroutines := 20
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Launch many goroutines broadcasting different events simultaneously
+	for i := 0; i < numGoroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			event := testEvent("concurrent_" + strings.Repeat("x", idx))
+			svc.Broadcast(context.Background(), event)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// All events have unique IDs, so every broadcast should succeed at least once
+	// across the two peers. Each event should reach both peers.
+	// However due to the sent map guard, duplicate event IDs are skipped.
+	// Since each goroutine sends a unique eventID, all 20 should be processed.
+	totalReceived := receivedA.Load() + receivedB.Load()
+	if totalReceived == 0 {
+		t.Error("no requests received by any peer")
+	}
+	// Each of 20 unique events should be delivered to 2 peers = 40 total
+	if totalReceived != int32(numGoroutines*2) {
+		t.Errorf("total requests received = %d, want %d", totalReceived, numGoroutines*2)
+	}
+}
+
+func TestBroadcast_ContextTimeoutMidBroadcast(t *testing.T) {
+	var receivedCount atomic.Int32
+	var start sync.WaitGroup
+	start.Add(1)
+
+	// Slow server that blocks until context is cancelled
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sync/cross-sync" {
+			receivedCount.Add(1)
+			start.Wait() // Block indefinitely until we release
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer server.Close()
+
+	pm := peer.NewPeerManager([]string{server.URL}, 500*time.Millisecond)
+	svc := NewCrossSyncService(pm, 500*time.Millisecond, newTestLogger())
+
+	// Context with a short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// We need a goroutine that holds start open past the timeout
+	done := make(chan struct{})
+	go func() {
+		svc.Broadcast(ctx, testEvent("mid_timeout"))
+		close(done)
+	}()
+
+	// Wait for timeout to trigger
+	time.Sleep(150 * time.Millisecond)
+	// Release the server so the blocked goroutine can finish
+	start.Done()
+
+	select {
+	case <-done:
+		// Broadcast returned (either due to timeout or completion)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Broadcast did not return within timeout")
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
@@ -386,6 +387,11 @@ func (f *FeedGenerator) getFollowerCount(ctx context.Context, userID int64) (int
 	var count int
 	query := `SELECT followers_count FROM users WHERE user_id = $1`
 	err := f.regionalDB.RegionalDB().QueryRow(ctx, query, userID).Scan(&count)
+	if err == pgx.ErrNoRows {
+		// User not yet in Regional DB (managed by wigowago-api migrations).
+		// Safe fallback to pull mode — not an error.
+		return 0, nil
+	}
 	return count, err
 }
 

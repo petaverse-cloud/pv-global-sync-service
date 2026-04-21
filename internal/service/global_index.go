@@ -453,3 +453,25 @@ func parseTextArray(s string) []string {
     }
     return parts
 }
+
+// UpsertUserIndex inserts or updates a user's region in the global index.
+func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, emailHash string, userID int64, region string) error {
+    query := `
+        INSERT INTO users_global_index (email_hash, user_id, region)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email_hash) DO UPDATE 
+        SET user_id = $2, region = $3, updated_at = NOW()
+    `
+    _, err := s.db.Exec(ctx, query, emailHash, userID, region)
+    return err
+}
+
+// FindRegionByEmailHash returns the region of a user identified by email_hash.
+func (s *GlobalIndexService) FindRegionByEmailHash(ctx context.Context, emailHash string) (string, error) {
+    var region string
+    err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE email_hash = $1", emailHash).Scan(&region)
+    if err == pgx.ErrNoRows {
+        return "", nil
+    }
+    return region, err
+}

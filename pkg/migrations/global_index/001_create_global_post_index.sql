@@ -33,3 +33,6 @@ CREATE INDEX IF NOT EXISTS idx_gpi_visibility ON global_post_index(visibility);
 CREATE INDEX IF NOT EXISTS idx_gpi_hashtags ON global_post_index USING GIN(hashtags);
 CREATE INDEX IF NOT EXISTS idx_gpi_created ON global_post_index(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_gpi_region ON global_post_index(author_region);
+
+-- Ensure region column is wide enough for 3+ char codes (sea, usw2, etc.)
+ALTER TABLE global_post_index ALTER COLUMN author_region TYPE VARCHAR(16);

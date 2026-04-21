@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS global_post_index (
     post_id BIGINT PRIMARY KEY,
     author_id BIGINT NOT NULL,
-    author_region VARCHAR(2) NOT NULL,
+    author_region VARCHAR(16) NOT NULL,
     content_preview TEXT,
     visibility VARCHAR(20) NOT NULL,
     hashtags TEXT[],
@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS cross_border_audit_log (
     event_id VARCHAR(64) NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     data_subject_id BIGINT NOT NULL,
-    source_region VARCHAR(2) NOT NULL,
-    target_region VARCHAR(2) NOT NULL,
+    source_region VARCHAR(16) NOT NULL,
+    target_region VARCHAR(16) NOT NULL,
     data_type VARCHAR(50) NOT NULL,
     legal_basis VARCHAR(100),
     user_consent BOOLEAN DEFAULT false,
@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_status ON cross_border_audit_log(status);
 CREATE TABLE IF NOT EXISTS sync_event_log (
     event_id VARCHAR(64) PRIMARY KEY,
     event_type VARCHAR(32) NOT NULL,
-    source_region VARCHAR(2) NOT NULL,
+    source_region VARCHAR(16) NOT NULL,
     processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     error_message TEXT

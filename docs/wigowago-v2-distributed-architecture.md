@@ -388,7 +388,7 @@ global-sync-service/
 
 ```sql
 -- 用户表增加 region 字段
-ALTER TABLE users ADD COLUMN region VARCHAR(2) NOT NULL DEFAULT 'NA';
+ALTER TABLE users ADD COLUMN region VARCHAR(16) NOT NULL DEFAULT 'NA';
 ALTER TABLE users ADD COLUMN data_residency VARCHAR(50) NOT NULL;
 ALTER TABLE users ADD COLUMN gdpr_consent BOOLEAN DEFAULT false;
 ALTER TABLE users ADD COLUMN cross_border_transfer_allowed BOOLEAN DEFAULT false;
@@ -471,7 +471,7 @@ flowchart TD
 CREATE TABLE global_post_index (
   post_id BIGINT PRIMARY KEY,
   author_id BIGINT NOT NULL,
-  author_region VARCHAR(2) NOT NULL,
+  author_region VARCHAR(16) NOT NULL,
   content_preview TEXT,
   visibility VARCHAR(20) NOT NULL,
   hashtags TEXT[],
@@ -1227,7 +1227,7 @@ GLOBAL_FRONT_DOOR=wigowago.azurefd.net
 
 ```sql
 -- 添加区域字段
-ALTER TABLE users ADD COLUMN region VARCHAR(2) NOT NULL DEFAULT 'NA';
+ALTER TABLE users ADD COLUMN region VARCHAR(16) NOT NULL DEFAULT 'NA';
 ALTER TABLE users ADD COLUMN data_residency VARCHAR(50) NOT NULL DEFAULT 'eastus2';
 ALTER TABLE users ADD COLUMN gdpr_consent BOOLEAN DEFAULT false;
 ALTER TABLE users ADD COLUMN cross_border_transfer_allowed BOOLEAN DEFAULT false;
@@ -1241,7 +1241,7 @@ CREATE INDEX idx_users_gdpr_consent ON users(gdpr_consent, cross_border_transfer
 CREATE TABLE global_post_index (
   post_id BIGINT PRIMARY KEY,
   author_id BIGINT NOT NULL,
-  author_region VARCHAR(2) NOT NULL,
+  author_region VARCHAR(16) NOT NULL,
   content_preview TEXT,
   visibility VARCHAR(20) NOT NULL,
   hashtags TEXT[],
@@ -1274,8 +1274,8 @@ CREATE TABLE cross_border_audit_log (
   event_id UUID NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   data_subject_id BIGINT NOT NULL,
-  source_region VARCHAR(2) NOT NULL,
-  target_region VARCHAR(2) NOT NULL,
+  source_region VARCHAR(16) NOT NULL,
+  target_region VARCHAR(16) NOT NULL,
   data_type VARCHAR(50) NOT NULL,
   legal_basis VARCHAR(100),
   user_consent BOOLEAN DEFAULT false,

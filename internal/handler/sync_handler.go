@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/consumer"
@@ -268,6 +269,13 @@ func (h *SyncHandler) handleStatsUpdated(ctx context.Context, event *model.Cross
 	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE post_id = $1`
 	err := h.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &favorites, &views)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			// Post not in Regional DB (may have been synced from peer cluster).
+			// Stats update is not actionable — skip silently.
+			h.log.Debug("Post not found in Regional DB, skipping stats update",
+				logger.Int64("post_id", postID))
+			return nil
+		}
 		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
 	}
 

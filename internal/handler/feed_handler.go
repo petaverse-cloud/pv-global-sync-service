@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -12,14 +13,19 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
+// FeedGenerator defines the interface for feed generation.
+type FeedGenerator interface {
+	GetFeed(ctx context.Context, userID int64, feedType string, cursor string, limit int) ([]service.FeedItem, string, bool, error)
+}
+
 // FeedHandler handles feed API endpoints.
 type FeedHandler struct {
-	generator *service.FeedGenerator
+	generator FeedGenerator
 	log       *logger.Logger
 }
 
 // NewFeedHandler creates a new feed handler.
-func NewFeedHandler(generator *service.FeedGenerator, log *logger.Logger) *FeedHandler {
+func NewFeedHandler(generator FeedGenerator, log *logger.Logger) *FeedHandler {
 	return &FeedHandler{generator: generator, log: log}
 }
 

@@ -36,8 +36,9 @@ const (
 type Region string
 
 const (
-	RegionEU Region = "EU"
-	RegionNA Region = "NA"
+	RegionEU  Region = "EU"
+	RegionNA  Region = "NA"
+	RegionSEA Region = "SEA" // Southeast Asia
 )
 
 // CrossRegionSyncEvent represents a cross-region synchronization event

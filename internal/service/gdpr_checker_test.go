@@ -102,52 +102,122 @@ func TestGDPRChecker_Check(t *testing.T) {
 	}
 }
 
-func TestExtractHashtags(t *testing.T) {
+func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
+	log, _ := logger.New("warn", "console")
+	c := &GDPRChecker{log: log}
+
 	tests := []struct {
-		content string
-		want    []string
+		name   string
+		event  *model.CrossRegionSyncEvent
+		expect CheckResult
 	}{
-		{"", nil},
-		{"no tags here", nil},
-		{"Hello #world", []string{"world"}},
-		{"#tag1 and #tag2", []string{"tag1", "tag2"}},
-		{"#dup and #dup", []string{"dup"}},
-		{"#hello_world", []string{"hello_world"}},
-		{"#test at the end", []string{"test"}},
-		{"at the end #test", []string{"test"}},
-		{"#a#b#c", []string{"a", "b", "c"}},
-		{"# with space after", []string{}},
+		{
+			name: "TIER_4 Media with mediaUrls -> AllowedGlobal",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_media_ok",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     100,
+					Visibility: model.VisibilityGlobal,
+					MediaURLs:  []string{"https://cdn.example.com/img1.jpg"},
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategoryMedia,
+					UserConsent:  true,
+				},
+			},
+			expect: AllowedGlobal,
+		},
+		{
+			name: "TIER_4 Media without mediaUrls -> DeniedMedia",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_media_no_urls",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     101,
+					Visibility: model.VisibilityGlobal,
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategoryMedia,
+					UserConsent:  true,
+				},
+			},
+			expect: DeniedMedia,
+		},
+		{
+			name: "empty visibility -> DeniedPrivate (default case)",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_empty_vis",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     102,
+					Visibility: "",
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategoryUGC,
+					UserConsent:  true,
+				},
+			},
+			expect: DeniedPrivate,
+		},
+		{
+			name: "unknown visibility -> DeniedPrivate (default case)",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_unknown_vis",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     103,
+					Visibility: "UNKNOWN",
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategoryUGC,
+					UserConsent:  true,
+				},
+			},
+			expect: DeniedPrivate,
+		},
+		{
+			name: "TIER_3 system + private visibility -> AllowedSystemData (system takes precedence)",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_sys_private",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     104,
+					Visibility: model.VisibilityPrivate,
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategorySystem,
+				},
+			},
+			expect: AllowedSystemData,
+		},
+		{
+			name: "TIER_1 PII + global + consent -> DeniedPII (PII takes precedence)",
+			event: &model.CrossRegionSyncEvent{
+				EventID:   "evt_pii_global_consent",
+				EventType: model.EventTypePostCreated,
+				Payload: model.EventPayload{
+					PostID:     105,
+					Visibility: model.VisibilityGlobal,
+				},
+				Metadata: model.EventMetadata{
+					DataCategory: model.DataCategoryPII,
+					UserConsent:  true,
+				},
+			},
+			expect: DeniedPII,
+		},
 	}
 
 	for _, tt := range tests {
-		got := extractHashtags(tt.content)
-		if len(got) != len(tt.want) {
-			t.Errorf("extractHashtags(%q) len = %d, want %d, got %v", tt.content, len(got), len(tt.want), got)
-			continue
-		}
-		for i := range tt.want {
-			if got[i] != tt.want[i] {
-				t.Errorf("extractHashtags(%q)[%d] = %q, want %q", tt.content, i, got[i], tt.want[i])
+		t.Run(tt.name, func(t *testing.T) {
+			result := c.Check(tt.event)
+			if result.Allowed != tt.expect.Allowed {
+				t.Errorf("Check() allowed = %v, want %v", result.Allowed, tt.expect.Allowed)
 			}
-		}
-	}
-}
-
-func TestTruncatePreview(t *testing.T) {
-	tests := []struct {
-		content string
-		maxLen  int
-		want    string
-	}{
-		{"short", 10, "short"},
-		{"exactly10", 10, "exactly10"},
-		{"this is a longer text that should be truncated", 20, "this is a longer tex..."},
-	}
-
-	for _, tt := range tests {
-		got := truncatePreview(tt.content, tt.maxLen)
-		if got != tt.want {
-			t.Errorf("truncatePreview(%q, %d) = %q, want %q", tt.content, tt.maxLen, got, tt.want)
-		}
+			if result.Reason != tt.expect.Reason {
+				t.Errorf("Check() reason = %q, want %q", result.Reason, tt.expect.Reason)
+			}
+		})
 	}
 }

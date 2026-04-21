@@ -10,3 +10,6 @@ CREATE TABLE IF NOT EXISTS sync_event_log (
 
 CREATE INDEX IF NOT EXISTS idx_event_status ON sync_event_log(status);
 CREATE INDEX IF NOT EXISTS idx_event_processed ON sync_event_log(processed_at);
+
+-- Ensure region column is wide enough for 3+ char codes (sea, usw2, etc.)
+ALTER TABLE sync_event_log ALTER COLUMN source_region TYPE VARCHAR(16);

@@ -209,6 +209,11 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 	// Global index query (Phase 2)
 	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
 
+	// User Index endpoints (Phase 4)
+	userIndexHandler := handler.NewUserIndexHandler(indexSvc, log)
+	r.Post("/index/users/check", userIndexHandler.HandleCheckUser)
+	r.Post("/index/users/upsert", userIndexHandler.HandleUpsertUser)
+
 	// Feed endpoints (Phase 3)
 	r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
 }

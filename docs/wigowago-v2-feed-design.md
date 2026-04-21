@@ -26,7 +26,7 @@
 -- 用户 Feed 表 (每个用户一条记录，存储 Post ID 列表)
 CREATE TABLE user_feed (
     user_id BIGINT NOT NULL,
-    region VARCHAR(2) NOT NULL,  -- 'EU' or 'NA'
+    region VARCHAR(16) NOT NULL,  -- 'EU' or 'NA'
     post_ids BIGINT[] NOT NULL,   -- 预计算的 Post ID 列表 (最新 500 条)
     last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, region)
@@ -47,7 +47,7 @@ CREATE INDEX idx_user_feed_last_updated ON user_feed (last_updated);
 CREATE TABLE global_post_index (
     post_id BIGINT PRIMARY KEY,
     author_id BIGINT NOT NULL,
-    author_region VARCHAR(2) NOT NULL,
+    author_region VARCHAR(16) NOT NULL,
     content_preview TEXT,
     visibility VARCHAR(20) NOT NULL,  -- 'GLOBAL', 'REGIONAL', 'PRIVATE'
     post_type VARCHAR(20) NOT NULL,   -- 'TEXT', 'IMAGE', 'VIDEO'
