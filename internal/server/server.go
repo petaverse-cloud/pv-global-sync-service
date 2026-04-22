@@ -50,6 +50,9 @@ type Server struct {
 	// Multi-cluster peer management
 	PeerManager      *peer.PeerManager
 	CrossSyncService *sync.CrossSyncService
+
+	// Background workers
+	UserIndexReconciler *sync.UserIndexReconciler
 }
 
 // New creates a new server with all dependencies initialized
@@ -144,6 +147,12 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	pm := peer.NewPeerManager(peerURLs, cfg.CrossSyncTimeout)
 	crossSyncSvc := sync.NewCrossSyncService(pm, cfg.CrossSyncTimeout, log)
 
+	// User index reconciler: periodically syncs missing entries from peer
+	var userIndexReconciler *sync.UserIndexReconciler
+	if len(peerURLs) > 0 {
+		userIndexReconciler = sync.NewUserIndexReconciler(indexSvc, peerURLs[0], log, 5*time.Minute)
+	}
+
 	if len(peerURLs) > 0 {
 		log.Info("Multi-cluster peer sync enabled",
 			logger.Any("peers", peerURLs))
@@ -180,8 +189,9 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 		SyncConsumer:     syncConsumer,
 		SyncHandler:      syncHandler,
 		FeedHandler:      feedHandler,
-		PeerManager:      pm,
-		CrossSyncService: crossSyncSvc,
+		PeerManager:       pm,
+		CrossSyncService:  crossSyncSvc,
+		UserIndexReconciler: userIndexReconciler,
 		httpServer: &http.Server{
 			Handler:           r,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -213,6 +223,7 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 	userIndexHandler := handler.NewUserIndexHandler(indexSvc, pm, log)
 	r.Post("/index/users/check", userIndexHandler.HandleCheckUser)
 	r.Post("/index/users/upsert", userIndexHandler.HandleUpsertUser)
+	r.Get("/index/users/all", userIndexHandler.HandleGetAllUsers)
 
 	// Feed endpoints (Phase 3)
 	r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
@@ -275,9 +286,15 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, db *postgres.Manage
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
 
-// Listen starts the HTTP server
+// Listen starts the HTTP server and background workers
 func (s *Server) Listen(addr string) error {
 	s.httpServer.Addr = addr
+
+	// Start user index reconciler
+	if s.UserIndexReconciler != nil {
+		go s.UserIndexReconciler.Run(context.Background())
+	}
+
 	return s.httpServer.ListenAndServe()
 }
 

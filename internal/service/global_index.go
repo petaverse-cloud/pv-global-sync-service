@@ -475,3 +475,33 @@ func (s *GlobalIndexService) FindRegionByEmailHash(ctx context.Context, emailHas
 	}
 	return region, err
 }
+
+// GetAllUserIndexEntries returns all user index entries (email_hash, region).
+// Used for cross-cluster reconciliation.
+func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]struct {
+	EmailHash string
+	Region    string
+}, error) {
+	rows, err := s.db.Query(ctx, "SELECT email_hash, region FROM users_global_index")
+	if err != nil {
+		return nil, fmt.Errorf("query all user index entries: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []struct {
+		EmailHash string
+		Region    string
+	}
+	for rows.Next() {
+		var e struct {
+			EmailHash string
+			Region    string
+		}
+		if err := rows.Scan(&e.EmailHash, &e.Region); err != nil {
+			return nil, fmt.Errorf("scan user index entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
