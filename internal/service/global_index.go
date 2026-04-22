@@ -504,4 +504,3 @@ func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]stru
 	}
 	return entries, rows.Err()
 }
-
