@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -118,7 +119,12 @@ func (h *UserIndexHandler) broadcastUserIndex(req UpsertUserRequest) {
 
 	for _, peerURL := range h.pm.HealthyPeers() {
 		url := peerURL + "/index/users/upsert"
-		resp, err := h.httpCli.Post(url, "application/json", bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			continue
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		resp, err := h.httpCli.Do(httpReq)
 		if err != nil {
 			h.log.Debug("Failed to broadcast user index to peer", logger.String("peer", peerURL), logger.Error(err))
 			continue
