@@ -163,7 +163,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	registerRoutes(r, db, redis, syncHandler, feedHandler, indexSvc, log)
+	registerRoutes(r, db, redis, syncHandler, feedHandler, indexSvc, pm, log)
 
 	s := &Server{
 		cfg:    cfg,
@@ -192,7 +192,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 }
 
 // registerRoutes sets up all HTTP routes
-func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, indexSvc *service.GlobalIndexService, log *logger.Logger) {
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, indexSvc *service.GlobalIndexService, pm *peer.PeerManager, log *logger.Logger) {
 	// Health checks
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		handleHealth(w, req, db, redis, log)
@@ -210,7 +210,7 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
 
 	// User Index endpoints (Phase 4)
-	userIndexHandler := handler.NewUserIndexHandler(indexSvc, log)
+	userIndexHandler := handler.NewUserIndexHandler(indexSvc, pm, log)
 	r.Post("/index/users/check", userIndexHandler.HandleCheckUser)
 	r.Post("/index/users/upsert", userIndexHandler.HandleUpsertUser)
 

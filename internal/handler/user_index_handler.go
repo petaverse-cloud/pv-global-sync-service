@@ -1,20 +1,30 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/peer"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
 type UserIndexHandler struct {
 	indexSvc *service.GlobalIndexService
+	pm       *peer.PeerManager
 	log      *logger.Logger
+	httpCli  *http.Client
 }
 
-func NewUserIndexHandler(indexSvc *service.GlobalIndexService, log *logger.Logger) *UserIndexHandler {
-	return &UserIndexHandler{indexSvc: indexSvc, log: log}
+func NewUserIndexHandler(indexSvc *service.GlobalIndexService, pm *peer.PeerManager, log *logger.Logger) *UserIndexHandler {
+	return &UserIndexHandler{
+		indexSvc: indexSvc,
+		pm:       pm,
+		log:      log,
+		httpCli:  &http.Client{Timeout: 3 * time.Second},
+	}
 }
 
 type CheckUserRequest struct {
@@ -91,7 +101,28 @@ func (h *UserIndexHandler) HandleUpsertUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Fire-and-forget: broadcast to all healthy peers so they also have this user index
+	go h.broadcastUserIndex(req)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// broadcastUserIndex sends the user index upsert to all healthy peers (fire-and-forget).
+func (h *UserIndexHandler) broadcastUserIndex(req UpsertUserRequest) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return
+	}
+
+	for _, peerURL := range h.pm.HealthyPeers() {
+		url := peerURL + "/index/users/upsert"
+		resp, err := h.httpCli.Post(url, "application/json", bytes.NewReader(body))
+		if err != nil {
+			h.log.Debug("Failed to broadcast user index to peer", logger.String("peer", peerURL), logger.Error(err))
+			continue
+		}
+		resp.Body.Close()
+	}
 }
