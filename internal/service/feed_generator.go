@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -277,10 +278,20 @@ func (f *FeedGenerator) getFeedFromRedis(ctx context.Context, userID int64, feed
 
 	items := make([]FeedItem, 0, len(members))
 	for _, m := range members {
-		postID, ok := m.Member.(int64)
-		if !ok {
-			// Try parsing from string
-			postID = 0 // fallback
+		var postID int64
+		switch v := m.Member.(type) {
+		case int64:
+			postID = v
+		case string:
+			// Redis zrange returns members as strings
+			if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+				postID = id
+			}
+		default:
+			f.log.Warn("Unknown member type in feed ZSET",
+				logger.String("feed_type", feedType),
+				logger.Any("member_type", fmt.Sprintf("%T", m.Member)))
+			continue
 		}
 		items = append(items, FeedItem{
 			PostID: postID,
