@@ -283,7 +283,7 @@ func (f *FeedGenerator) getFeedFromRedis(ctx context.Context, userID int64, feed
 		case int64:
 			postID = v
 		case string:
-			// Redis zrange returns members as strings
+			// Redis ZRANGE returns members as strings, not int64
 			if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 				postID = id
 			}
