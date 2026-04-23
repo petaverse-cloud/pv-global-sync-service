@@ -99,10 +99,10 @@ type GlobalPostIndex struct {
 	DataCategory   string    `json:"dataCategory"`
 	CreatedAt      time.Time `json:"createdAt"`
 	SyncedAt       time.Time `json:"syncedAt"`
-	// Author Metadata (Layer 1: Public Info)
-	AuthorSlug      *int64 `json:"authorSlug,omitempty"`
-	AuthorNickname  string `json:"authorNickname"`
-	AuthorAvatarURL string `json:"authorAvatarUrl"`
+	// Author Metadata (Layer 1: Public Info) - Nullable
+	AuthorSlug      *int64  `json:"authorSlug,omitempty"`
+	AuthorNickname  *string `json:"authorNickname,omitempty"`
+	AuthorAvatarURL *string `json:"authorAvatarUrl,omitempty"`
 }
 
 // FeedItem represents an item in a user's feed
