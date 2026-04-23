@@ -61,6 +61,15 @@ type EventPayload struct {
 	Visibility   Visibility `json:"visibility"`
 	Content      string     `json:"content,omitempty"`
 	MediaURLs    []string   `json:"mediaUrls,omitempty"`
+	// Author Metadata (Layer 1: Public Info)
+	AuthorProfile *AuthorProfile `json:"authorProfile,omitempty"`
+}
+
+// AuthorProfile contains public author info for feed display.
+type AuthorProfile struct {
+	Slug      int64  `json:"slug"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatarUrl"`
 }
 
 // EventMetadata contains compliance and audit information
@@ -90,6 +99,10 @@ type GlobalPostIndex struct {
 	DataCategory   string    `json:"dataCategory"`
 	CreatedAt      time.Time `json:"createdAt"`
 	SyncedAt       time.Time `json:"syncedAt"`
+	// Author Metadata (Layer 1: Public Info)
+	AuthorSlug      *int64 `json:"authorSlug,omitempty"`
+	AuthorNickname  string `json:"authorNickname"`
+	AuthorAvatarURL string `json:"authorAvatarUrl"`
 }
 
 // FeedItem represents an item in a user's feed

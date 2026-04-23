@@ -45,16 +45,26 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		INSERT INTO global_post_index (
 			post_id, author_id, author_region, content_preview, visibility,
 			hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
-			gdpr_compliant, user_consent, data_category, created_at, synced_at
+			gdpr_compliant, user_consent, data_category, created_at, synced_at,
+			author_slug, author_nickname, author_avatar_url
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, 0, 0, 0, 0,
-			$9, $10, $11, $12, $13
+			$9, $10, $11, $12, $13,
+			$14, $15, $16
 		)
 		ON CONFLICT (post_id) DO NOTHING
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
+	var authorSlug *int64
+	var authorNickname, authorAvatarURL string
+	if event.Payload.AuthorProfile != nil {
+		authorSlug = &event.Payload.AuthorProfile.Slug
+		authorNickname = event.Payload.AuthorProfile.Nickname
+		authorAvatarURL = event.Payload.AuthorProfile.AvatarURL
+	}
+
 	_, err := s.db.Exec(ctx, query,
 		event.Payload.PostID,
 		event.Payload.AuthorID,
@@ -69,6 +79,9 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		event.Metadata.DataCategory,
 		now,
 		now,
+		authorSlug,
+		authorNickname,
+		authorAvatarURL,
 	)
 
 	if err != nil {
