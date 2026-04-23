@@ -24,6 +24,10 @@ type GlobalIndexPost struct {
 	SharesCount    int
 	ViewsCount     int
 	CreatedAt      time.Time
+	// Author Metadata (Layer 1: Public Info)
+	AuthorSlug      *int64
+	AuthorNickname  string
+	AuthorAvatarURL string
 }
 
 // GlobalIndexService manages operations on the global_post_index table.
@@ -174,7 +178,8 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 		SELECT post_id, author_id, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at
+		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
+		       author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE post_id = $1
 	`
@@ -191,6 +196,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
 		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
 		&createdAt, &syncedAt,
+		&post.AuthorSlug, &post.AuthorNickname, &post.AuthorAvatarURL,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -348,7 +354,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 	query := `
 		SELECT post_id, author_id, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
-		       created_at
+		       created_at, author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE author_id = ANY($1)
 		ORDER BY created_at DESC
@@ -366,7 +372,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
-			&p.CreatedAt); err != nil {
+			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
 		posts = append(posts, p)
@@ -380,7 +386,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 	query := `
 		SELECT post_id, author_id, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
-		       created_at
+		       created_at, author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
 		ORDER BY created_at DESC
 		LIMIT $1
@@ -397,7 +403,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
-			&p.CreatedAt); err != nil {
+			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
 		posts = append(posts, p)
@@ -411,7 +417,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 	query := `
 		SELECT post_id, author_id, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
-		       created_at
+		       created_at, author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE created_at > NOW() - INTERVAL '24 hours'
 		ORDER BY (likes_count + comments_count*2 + shares_count*3) DESC
@@ -429,7 +435,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
-			&p.CreatedAt); err != nil {
+			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
 		posts = append(posts, p)
