@@ -38,9 +38,12 @@ type CheckUserResponse struct {
 }
 
 type UpsertUserRequest struct {
-	EmailHash string `json:"emailHash"`
-	UserID    int64  `json:"userId"`
-	Region    string `json:"region"`
+	EmailHash  string `json:"emailHash"`
+	UserID     int64  `json:"userId"`
+	Region     string `json:"region"`
+	AuthorSlug *int64 `json:"authorSlug,omitempty"`
+	Nickname   string `json:"nickname"`
+	AvatarURL  string `json:"avatarUrl"`
 }
 
 // HandleCheckUser handles POST /index/users/check
@@ -95,7 +98,7 @@ func (h *UserIndexHandler) HandleUpsertUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := h.indexSvc.UpsertUserIndex(r.Context(), req.EmailHash, req.UserID, req.Region)
+	err := h.indexSvc.UpsertUserIndex(r.Context(), req.EmailHash, req.UserID, req.Region, req.AuthorSlug, req.Nickname, req.AvatarURL)
 	if err != nil {
 		h.log.Error("Failed to upsert user in global index", logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal error")

@@ -92,7 +92,7 @@ func (r *UserIndexReconciler) reconcile(ctx context.Context) {
 	for _, e := range peerEntries {
 		if _, exists := localSet[e.EmailHash]; !exists {
 			// Entry missing locally, sync it
-			if err := r.indexSvc.UpsertUserIndex(ctx, e.EmailHash, 0, e.Region); err != nil {
+			if err := r.indexSvc.UpsertUserIndex(ctx, e.EmailHash, 0, e.Region, nil, "", ""); err != nil {
 				r.log.Error("Reconciliation: failed to sync missing entry",
 					logger.String("emailHash", e.EmailHash),
 					logger.Error(err))

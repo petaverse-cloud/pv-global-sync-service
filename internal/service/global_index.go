@@ -454,15 +454,15 @@ func parseTextArray(s string) []string {
 	return parts
 }
 
-// UpsertUserIndex inserts or updates a user's region in the global index.
-func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, emailHash string, userID int64, region string) error {
+// UpsertUserIndex inserts or updates a user's region and public profile info in the global index.
+func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, emailHash string, userID int64, region string, authorSlug *int64, nickname, avatarURL string) error {
 	query := `
-        INSERT INTO users_global_index (email_hash, user_id, region)
-        VALUES ($1, $2, $3)
+        INSERT INTO users_global_index (email_hash, user_id, region, author_slug, author_nickname, author_avatar_url)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (email_hash) DO UPDATE 
-        SET user_id = $2, region = $3, updated_at = NOW()
+        SET user_id = $2, region = $3, author_slug = $4, author_nickname = $5, author_avatar_url = $6, updated_at = NOW()
     `
-	_, err := s.db.Exec(ctx, query, emailHash, userID, region)
+	_, err := s.db.Exec(ctx, query, emailHash, userID, region, authorSlug, nickname, avatarURL)
 	return err
 }
 
