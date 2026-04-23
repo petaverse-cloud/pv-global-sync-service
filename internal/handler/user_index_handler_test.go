@@ -48,7 +48,7 @@ func TestUpsertUserRequest_JSONMarshaling(t *testing.T) {
 			if req.Region != tt.wantRegion {
 				t.Errorf("Region = %v, want %v", req.Region, tt.wantRegion)
 			}
-			
+
 			// Check pointer equality for slug
 			if tt.wantSlug == nil && req.AuthorSlug != nil {
 				t.Errorf("AuthorSlug should be nil, got %v", req.AuthorSlug)
@@ -59,7 +59,7 @@ func TestUpsertUserRequest_JSONMarshaling(t *testing.T) {
 					t.Errorf("AuthorSlug = %v, want %v", *req.AuthorSlug, *tt.wantSlug)
 				}
 			}
-			
+
 			if req.Nickname != tt.wantNickname {
 				t.Errorf("Nickname = %v, want %v", req.Nickname, tt.wantNickname)
 			}
