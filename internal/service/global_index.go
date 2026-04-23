@@ -24,10 +24,10 @@ type GlobalIndexPost struct {
 	SharesCount    int
 	ViewsCount     int
 	CreatedAt      time.Time
-	// Author Metadata (Layer 1: Public Info)
+	// Author Metadata (Layer 1: Public Info) - Nullable
 	AuthorSlug      *int64
-	AuthorNickname  string
-	AuthorAvatarURL string
+	AuthorNickname  *string
+	AuthorAvatarURL *string
 }
 
 // GlobalIndexService manages operations on the global_post_index table.
