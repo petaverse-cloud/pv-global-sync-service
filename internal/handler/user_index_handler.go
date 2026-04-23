@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/peer"
@@ -192,6 +193,42 @@ func (h *UserIndexHandler) sendWithRetry(url string, body []byte, emailHash stri
 		}
 	}
 	return false
+}
+
+// HandleGetUserRegion handles GET /index/user/region?slug=...
+// Returns the region where the user with the given slug is located.
+func (h *UserIndexHandler) HandleGetUserRegion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	slugStr := r.URL.Query().Get("slug")
+	if slugStr == "" {
+		writeError(w, http.StatusBadRequest, "missing slug parameter")
+		return
+	}
+
+	slug, err := strconv.ParseInt(slugStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid slug")
+		return
+	}
+
+	region, err := h.indexSvc.FindRegionBySlug(r.Context(), slug)
+	if err != nil {
+		h.log.Error("Failed to lookup user region", logger.Int64("slug", slug), logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if region == "" {
+		writeError(w, http.StatusNotFound, "user not found in global index")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"region": region})
 }
 
 // HandleGetAllUsers handles GET /index/users/all - returns all user index entries for reconciliation.

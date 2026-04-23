@@ -476,13 +476,23 @@ func parseTextArray(s string) []string {
 // UpsertUserIndex inserts or updates a user's region and public profile info in the global index.
 func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, emailHash string, userID int64, region string, authorSlug *int64, nickname, avatarURL string) error {
 	query := `
-        INSERT INTO users_global_index (email_hash, user_id, region, author_slug, author_nickname, author_avatar_url)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO users_global_index (email_hash, user_id, region, slug, author_slug, author_nickname, author_avatar_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (email_hash) DO UPDATE 
-        SET user_id = $2, region = $3, author_slug = $4, author_nickname = $5, author_avatar_url = $6, updated_at = NOW()
+        SET user_id = $2, region = $3, slug = $4, author_slug = $5, author_nickname = $6, author_avatar_url = $7, updated_at = NOW()
     `
-	_, err := s.db.Exec(ctx, query, emailHash, userID, region, authorSlug, nickname, avatarURL)
+	_, err := s.db.Exec(ctx, query, emailHash, userID, region, authorSlug, authorSlug, nickname, avatarURL)
 	return err
+}
+
+// FindRegionBySlug returns the region of a user identified by slug.
+func (s *GlobalIndexService) FindRegionBySlug(ctx context.Context, slug int64) (string, error) {
+	var region string
+	err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE slug = $1", slug).Scan(&region)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return region, err
 }
 
 // FindRegionByEmailHash returns the region of a user identified by email_hash.
