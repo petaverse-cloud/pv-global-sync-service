@@ -177,7 +177,7 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, like
 // GetPost retrieves a post from the global index.
 func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.GlobalPostIndex, error) {
 	query := `
-		SELECT post_id, post_slug, author_id, author_region, content_preview, visibility,
+		SELECT post_id, COALESCE(post_slug, 0), author_id, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
@@ -386,7 +386,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 // Used for the "global" feed.
 func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
 	query := `
-		SELECT post_id, post_slug, author_id, content_preview,
+		SELECT post_id, COALESCE(post_slug, 0), author_id, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
 		       created_at, author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
@@ -539,7 +539,7 @@ func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]stru
 // GetPostBySlug retrieves a post from the global index by its globally unique Snowflake ID.
 func (s *GlobalIndexService) GetPostBySlug(ctx context.Context, postSlug int64) (*model.GlobalPostIndex, error) {
 	query := `
-		SELECT post_id, post_slug, author_id, author_region, content_preview, visibility,
+		SELECT post_id, COALESCE(post_slug, 0), author_id, author_region, content_preview, visibility,
 		       COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
