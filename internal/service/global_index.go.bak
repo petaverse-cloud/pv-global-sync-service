@@ -17,7 +17,6 @@ import (
 // GlobalIndexPost is a simplified post representation from the global index.
 type GlobalIndexPost struct {
 	PostID         int64
-	PostSlug       int64
 	AuthorID       int64
 	ContentPreview string
 	LikesCount     int
@@ -48,15 +47,15 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 
 	query := `
 		INSERT INTO global_post_index (
-			post_id, post_slug, author_id, author_region, content_preview, visibility,
+			post_id, author_id, author_region, content_preview, visibility,
 			hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
 			gdpr_compliant, user_consent, data_category, created_at, synced_at,
 			author_slug, author_nickname, author_avatar_url
 		) VALUES (
-			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, 0, 0, 0, 0,
-			$10, $11, $12, $13, $14,
-			$15, $16, $17
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, 0, 0, 0, 0,
+			$9, $10, $11, $12, $13,
+			$14, $15, $16
 		)
 		ON CONFLICT (post_id) DO NOTHING
 	`
@@ -72,7 +71,6 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 
 	_, err := s.db.Exec(ctx, query,
 		event.Payload.PostID,
-		event.Payload.PostSlug,
 		event.Payload.AuthorID,
 		event.Payload.AuthorRegion,
 		truncatePreview(event.Payload.Content, 500),
@@ -177,7 +175,7 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, like
 // GetPost retrieves a post from the global index.
 func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.GlobalPostIndex, error) {
 	query := `
-		SELECT post_id, post_slug, author_id, author_region, content_preview, visibility,
+		SELECT post_id, author_id, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
@@ -192,7 +190,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 	var mediaURLsStr string
 
 	err := s.db.QueryRow(ctx, query, postID).Scan(
-		&post.PostID, &post.PostSlug, &post.AuthorID, &post.AuthorRegion,
+		&post.PostID, &post.AuthorID, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
 		&hashtags, &mentions, &mediaURLsStr,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
@@ -372,7 +370,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostSlug, &p.AuthorID, &p.ContentPreview,
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -386,7 +384,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 // Used for the "global" feed.
 func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
 	query := `
-		SELECT post_id, post_slug, author_id, content_preview,
+		SELECT post_id, author_id, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
 		       created_at, author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
@@ -403,7 +401,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostSlug, &p.AuthorID, &p.ContentPreview,
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -435,7 +433,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostSlug, &p.AuthorID, &p.ContentPreview,
+		if err := rows.Scan(&p.PostID, &p.AuthorID, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorSlug, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -534,47 +532,4 @@ func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]stru
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
-}
-
-// GetPostBySlug retrieves a post from the global index by its globally unique Snowflake ID.
-func (s *GlobalIndexService) GetPostBySlug(ctx context.Context, postSlug int64) (*model.GlobalPostIndex, error) {
-	query := `
-		SELECT post_id, post_slug, author_id, author_region, content_preview, visibility,
-		       COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
-		       likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
-		       author_slug, author_nickname, author_avatar_url
-		FROM global_post_index
-		WHERE post_slug = $1
-	`
-
-	var post model.GlobalPostIndex
-	var createdAt, syncedAt time.Time
-	var mediaURLsStr string
-
-	err := s.db.QueryRow(ctx, query, postSlug).Scan(
-		&post.PostID, &post.PostSlug, &post.AuthorID, &post.AuthorRegion,
-		&post.ContentPreview, &post.Visibility,
-		&mediaURLsStr,
-		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
-		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
-		&createdAt, &syncedAt,
-		&post.AuthorSlug, &post.AuthorNickname, &post.AuthorAvatarURL,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("get post by slug %d: %w", postSlug, err)
-	}
-
-	post.CreatedAt = createdAt
-	post.SyncedAt = syncedAt
-
-	// Parse media_urls from comma-separated string
-	if mediaURLsStr != "" {
-		post.MediaURLs = strings.Split(mediaURLsStr, ",")
-	}
-
-	return &post, nil
 }

@@ -56,6 +56,7 @@ type CrossRegionSyncEvent struct {
 // EventPayload contains the core data of the sync event
 type EventPayload struct {
 	PostID       int64      `json:"postId"`
+	PostSlug     int64      `json:"postSlug,omitempty"`     // Globally unique Snowflake ID
 	AuthorID     int64      `json:"authorId"`
 	AuthorRegion Region     `json:"authorRegion"`
 	Visibility   Visibility `json:"visibility"`
@@ -83,6 +84,7 @@ type EventMetadata struct {
 // GlobalPostIndex represents a post entry in the global index
 type GlobalPostIndex struct {
 	PostID         int64     `json:"postId"`
+	PostSlug       int64     `json:"postSlug,omitempty"`       // Globally unique Snowflake ID for cross-region lookup
 	AuthorID       int64     `json:"authorId"`
 	AuthorRegion   Region    `json:"authorRegion"`
 	ContentPreview string    `json:"contentPreview"`

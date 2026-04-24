@@ -301,3 +301,37 @@ func writeError(w http.ResponseWriter, status int, message string) {
 		"message": message,
 	})
 }
+
+// HandleGetPostBySlug handles GET /index/posts/slug/:slug for querying the global index by Snowflake ID.
+func (h *SyncHandler) HandleGetPostBySlug(w http.ResponseWriter, r *http.Request) {
+	slugStr := chi.URLParam(r, "slug")
+	if slugStr == "" {
+		writeError(w, http.StatusBadRequest, "missing slug")
+		return
+	}
+
+	slug, err := parseInt64(slugStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid slug")
+		return
+	}
+
+	post, err := h.indexSvc.GetPostBySlug(r.Context(), slug)
+	if err != nil {
+		h.log.Error("Failed to get post by slug",
+			logger.Int64("post_slug", slug),
+			logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if post == nil {
+		writeError(w, http.StatusNotFound, "post not found in global index")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(post); err != nil {
+		h.log.Error("Failed to encode post", logger.Error(err))
+	}
+}
