@@ -5,32 +5,28 @@ import (
 	"testing"
 )
 
-// TestUpsertUserRequest_JSONMarshaling verifies that the new fields are optional and parsed correctly.
-// This ensures backwards compatibility for legacy payloads that do not include author metadata.
+// TestUpsertUserRequest_JSONMarshaling verifies that the uid-based payload is parsed correctly.
 func TestUpsertUserRequest_JSONMarshaling(t *testing.T) {
 	tests := []struct {
 		name          string
 		jsonBody      string
-		wantEmailHash string
+		wantUID       int64
 		wantRegion    string
-		wantSlug      *int64
-		wantNickname  string
+		wantEmailHash *string
 	}{
 		{
-			name:          "Legacy payload (no author metadata)",
-			jsonBody:      `{"emailHash":"hash1", "userId":1, "region":"sea"}`,
-			wantEmailHash: "hash1",
+			name:          "Payload with emailHash",
+			jsonBody:      `{"uid": 2206208000, "region": "sea", "emailHash": "e928de69..."}`,
+			wantUID:       2206208000,
 			wantRegion:    "sea",
-			wantSlug:      nil,
-			wantNickname:  "",
+			wantEmailHash: func() *string { v := "e928de69..."; return &v }(),
 		},
 		{
-			name:          "New payload (with author metadata)",
-			jsonBody:      `{"emailHash":"hash2", "userId":2, "region":"eu", "authorSlug":123, "nickname":"Alice", "avatarUrl":"http://a.com/1.jpg"}`,
-			wantEmailHash: "hash2",
+			name:          "Payload without emailHash (OAuth user)",
+			jsonBody:      `{"uid": 4198502400, "region": "eu"}`,
+			wantUID:       4198502400,
 			wantRegion:    "eu",
-			wantSlug:      func() *int64 { v := int64(123); return &v }(),
-			wantNickname:  "Alice",
+			wantEmailHash: nil,
 		},
 	}
 
@@ -42,26 +38,20 @@ func TestUpsertUserRequest_JSONMarshaling(t *testing.T) {
 				t.Fatalf("Unmarshal error: %v", err)
 			}
 
-			if req.EmailHash != tt.wantEmailHash {
-				t.Errorf("EmailHash = %v, want %v", req.EmailHash, tt.wantEmailHash)
+			if req.UID != tt.wantUID {
+				t.Errorf("UID = %v, want %v", req.UID, tt.wantUID)
 			}
 			if req.Region != tt.wantRegion {
 				t.Errorf("Region = %v, want %v", req.Region, tt.wantRegion)
 			}
-
-			// Check pointer equality for slug
-			if tt.wantSlug == nil && req.AuthorSlug != nil {
-				t.Errorf("AuthorSlug should be nil, got %v", req.AuthorSlug)
-			} else if tt.wantSlug != nil {
-				if req.AuthorSlug == nil {
-					t.Errorf("AuthorSlug should be %v, got nil", *tt.wantSlug)
-				} else if *req.AuthorSlug != *tt.wantSlug {
-					t.Errorf("AuthorSlug = %v, want %v", *req.AuthorSlug, *tt.wantSlug)
+			if tt.wantEmailHash == nil && req.EmailHash != nil {
+				t.Errorf("EmailHash should be nil, got %v", *req.EmailHash)
+			} else if tt.wantEmailHash != nil {
+				if req.EmailHash == nil {
+					t.Errorf("EmailHash should be %v, got nil", *tt.wantEmailHash)
+				} else if *req.EmailHash != *tt.wantEmailHash {
+					t.Errorf("EmailHash = %v, want %v", *req.EmailHash, *tt.wantEmailHash)
 				}
-			}
-
-			if req.Nickname != tt.wantNickname {
-				t.Errorf("Nickname = %v, want %v", req.Nickname, tt.wantNickname)
 			}
 		})
 	}

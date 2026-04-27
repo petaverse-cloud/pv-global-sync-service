@@ -39,12 +39,9 @@ type CheckUserResponse struct {
 }
 
 type UpsertUserRequest struct {
-	EmailHash  string `json:"emailHash"`
-	UserID     int64  `json:"userId"`
-	Region     string `json:"region"`
-	AuthorSlug *int64 `json:"authorSlug,omitempty"`
-	Nickname   string `json:"nickname"`
-	AvatarURL  string `json:"avatarUrl"`
+	UID       int64   `json:"uid"`
+	EmailHash *string `json:"emailHash,omitempty"`
+	Region    string  `json:"region"`
 }
 
 // HandleCheckUser handles POST /index/users/check
@@ -94,12 +91,12 @@ func (h *UserIndexHandler) HandleUpsertUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.EmailHash == "" || req.Region == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields")
+	if req.UID == 0 || req.Region == "" {
+		writeError(w, http.StatusBadRequest, "missing required fields (uid, region)")
 		return
 	}
 
-	err := h.indexSvc.UpsertUserIndex(r.Context(), req.EmailHash, req.UserID, req.Region, req.AuthorSlug, req.Nickname, req.AvatarURL)
+	err := h.indexSvc.UpsertUserIndex(r.Context(), req.UID, req.Region, req.EmailHash)
 	if err != nil {
 		h.log.Error("Failed to upsert user in global index", logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -119,18 +116,22 @@ func (h *UserIndexHandler) broadcastUserIndex(req UpsertUserRequest) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		h.log.Error("Failed to marshal user index for broadcast",
-			logger.String("emailHash", req.EmailHash),
+			logger.Int64("uid", req.UID),
 			logger.Error(err))
 		return
 	}
 
 	for _, peerURL := range h.pm.HealthyPeers() {
 		url := peerURL + "/index/users/upsert"
-		success := h.sendWithRetry(url, body, req.EmailHash)
+		emailHashStr := ""
+		if req.EmailHash != nil {
+			emailHashStr = *req.EmailHash
+		}
+		success := h.sendWithRetry(url, body, emailHashStr)
 		if !success {
 			h.log.Warn("User index broadcast failed after retries",
 				logger.String("peer", peerURL),
-				logger.String("emailHash", req.EmailHash))
+				logger.Int64("uid", req.UID))
 		}
 	}
 }
@@ -195,29 +196,29 @@ func (h *UserIndexHandler) sendWithRetry(url string, body []byte, emailHash stri
 	return false
 }
 
-// HandleGetUserRegion handles GET /index/user/region?slug=...
-// Returns the region where the user with the given slug is located.
+// HandleGetUserRegion handles GET /index/user/region?uid=...
+// Returns the region where the user with the given Snowflake uid is located.
 func (h *UserIndexHandler) HandleGetUserRegion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	slugStr := r.URL.Query().Get("slug")
-	if slugStr == "" {
-		writeError(w, http.StatusBadRequest, "missing slug parameter")
+	uidStr := r.URL.Query().Get("uid")
+	if uidStr == "" {
+		writeError(w, http.StatusBadRequest, "missing uid parameter")
 		return
 	}
 
-	slug, err := strconv.ParseInt(slugStr, 10, 64)
+	uid, err := strconv.ParseInt(uidStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid slug")
+		writeError(w, http.StatusBadRequest, "invalid uid")
 		return
 	}
 
-	region, err := h.indexSvc.FindRegionBySlug(r.Context(), slug)
+	region, err := h.indexSvc.FindRegionByUID(r.Context(), uid)
 	if err != nil {
-		h.log.Error("Failed to lookup user region", logger.Int64("slug", slug), logger.Error(err))
+		h.log.Error("Failed to lookup user region",		logger.Int64("uid", uid),logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -246,13 +247,15 @@ func (h *UserIndexHandler) HandleGetAllUsers(w http.ResponseWriter, r *http.Requ
 	}
 
 	type UserEntry struct {
-		EmailHash string `json:"emailHash"`
-		Region    string `json:"region"`
+		UID       int64   `json:"uid"`
+		Region    string  `json:"region"`
+		EmailHash *string `json:"emailHash,omitempty"`
 	}
 	users := make([]UserEntry, len(entries))
 	for i, e := range entries {
-		users[i].EmailHash = e.EmailHash
+		users[i].UID = e.UID
 		users[i].Region = e.Region
+		users[i].EmailHash = e.EmailHash
 	}
 
 	w.Header().Set("Content-Type", "application/json")

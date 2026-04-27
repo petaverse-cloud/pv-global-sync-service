@@ -55,6 +55,24 @@ CREATE INDEX IF NOT EXISTS idx_uf_expires ON user_feed(expires_at) WHERE expires
 
 -- ============================================================
 -- Cross-Border Audit Log (GDPR compliance)
+
+-- ============================================================
+-- Global User Index Table
+-- uid (Snowflake) is the true globally unique user identifier.
+-- email_hash is optional and used only for pre-login existence checks.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users_global_index (
+    uid         BIGINT PRIMARY KEY,
+    region      VARCHAR(16) NOT NULL,
+    email_hash  VARCHAR(64),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ugi_email_hash ON users_global_index(email_hash);
+CREATE INDEX IF NOT EXISTS idx_ugi_region ON users_global_index(region);
+
+-- ============================================================
 -- ============================================================
 CREATE TABLE IF NOT EXISTS cross_border_audit_log (
     log_id BIGSERIAL PRIMARY KEY,

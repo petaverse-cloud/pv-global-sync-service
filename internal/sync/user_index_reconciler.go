@@ -81,20 +81,19 @@ func (r *UserIndexReconciler) reconcile(ctx context.Context) {
 		return
 	}
 
-	// 3. Build local set
-	localSet := make(map[string]string, len(localEntries))
+	// 3. Build local set (keyed by uid)
+	localSet := make(map[int64]bool, len(localEntries))
 	for _, e := range localEntries {
-		localSet[e.EmailHash] = e.Region
+		localSet[e.UID] = true
 	}
 
 	// 4. Sync missing entries from peer
 	synced := 0
 	for _, e := range peerEntries {
-		if _, exists := localSet[e.EmailHash]; !exists {
-			// Entry missing locally, sync it
-			if err := r.indexSvc.UpsertUserIndex(ctx, e.EmailHash, 0, e.Region, nil, "", ""); err != nil {
+		if !localSet[e.UID] {
+			if err := r.indexSvc.UpsertUserIndex(ctx, e.UID, e.Region, e.EmailHash); err != nil {
 				r.log.Error("Reconciliation: failed to sync missing entry",
-					logger.String("emailHash", e.EmailHash),
+					logger.Int64("uid", e.UID),
 					logger.Error(err))
 				continue
 			}
@@ -117,8 +116,9 @@ func (r *UserIndexReconciler) reconcile(ctx context.Context) {
 }
 
 func (r *UserIndexReconciler) fetchPeerEntries(ctx context.Context) ([]struct {
-	EmailHash string
+	UID       int64
 	Region    string
+	EmailHash *string
 }, error) {
 	url := r.peerURL + "/index/users/all"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -143,8 +143,9 @@ func (r *UserIndexReconciler) fetchPeerEntries(ctx context.Context) ([]struct {
 
 	var result struct {
 		Users []struct {
-			EmailHash string `json:"emailHash"`
-			Region    string `json:"region"`
+			UID       int64   `json:"uid"`
+			Region    string  `json:"region"`
+			EmailHash *string `json:"emailHash,omitempty"`
 		} `json:"users"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -152,12 +153,14 @@ func (r *UserIndexReconciler) fetchPeerEntries(ctx context.Context) ([]struct {
 	}
 
 	entries := make([]struct {
-		EmailHash string
+		UID       int64
 		Region    string
+		EmailHash *string
 	}, len(result.Users))
 	for i, u := range result.Users {
-		entries[i].EmailHash = u.EmailHash
+		entries[i].UID = u.UID
 		entries[i].Region = u.Region
+		entries[i].EmailHash = u.EmailHash
 	}
 	return entries, nil
 }

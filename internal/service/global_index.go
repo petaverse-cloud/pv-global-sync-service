@@ -475,22 +475,24 @@ func parseTextArray(s string) []string {
 	return parts
 }
 
-// UpsertUserIndex inserts or updates a user's region and public profile info in the global index.
-func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, emailHash string, userID int64, region string, authorSlug *int64, nickname, avatarURL string) error {
+// UpsertUserIndex inserts or updates a user in the global index.
+// uid is the Snowflake slug — the true globally unique user identifier.
+// emailHash is optional (Google/Apple OAuth may not have an email).
+func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, uid int64, region string, emailHash *string) error {
 	query := `
-        INSERT INTO users_global_index (email_hash, user_id, region, slug, author_slug, author_nickname, author_avatar_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (email_hash) DO UPDATE 
-        SET user_id = $2, region = $3, slug = $4, author_slug = $5, author_nickname = $6, author_avatar_url = $7, updated_at = NOW()
+        INSERT INTO users_global_index (uid, region, email_hash)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (uid) DO UPDATE 
+        SET region = $2, email_hash = $3, updated_at = NOW()
     `
-	_, err := s.db.Exec(ctx, query, emailHash, userID, region, authorSlug, authorSlug, nickname, avatarURL)
+	_, err := s.db.Exec(ctx, query, uid, region, emailHash)
 	return err
 }
 
-// FindRegionBySlug returns the region of a user identified by slug.
-func (s *GlobalIndexService) FindRegionBySlug(ctx context.Context, slug int64) (string, error) {
+// FindRegionByUID returns the home region of a user identified by their Snowflake uid (slug).
+func (s *GlobalIndexService) FindRegionByUID(ctx context.Context, uid int64) (string, error) {
 	var region string
-	err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE slug = $1", slug).Scan(&region)
+	err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE uid = $1", uid).Scan(&region)
 	if err == pgx.ErrNoRows {
 		return "", nil
 	}
@@ -507,28 +509,25 @@ func (s *GlobalIndexService) FindRegionByEmailHash(ctx context.Context, emailHas
 	return region, err
 }
 
-// GetAllUserIndexEntries returns all user index entries (email_hash, region).
-// Used for cross-cluster reconciliation.
-func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]struct {
-	EmailHash string
+// UserIndexEntry is a single row from users_global_index.
+type UserIndexEntry struct {
+	UID       int64
 	Region    string
-}, error) {
-	rows, err := s.db.Query(ctx, "SELECT email_hash, region FROM users_global_index")
+	EmailHash *string
+}
+
+// GetAllUserIndexEntries returns all user index entries for cross-cluster reconciliation.
+func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]UserIndexEntry, error) {
+	rows, err := s.db.Query(ctx, "SELECT uid, region, email_hash FROM users_global_index")
 	if err != nil {
 		return nil, fmt.Errorf("query all user index entries: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []struct {
-		EmailHash string
-		Region    string
-	}
+	var entries []UserIndexEntry
 	for rows.Next() {
-		var e struct {
-			EmailHash string
-			Region    string
-		}
-		if err := rows.Scan(&e.EmailHash, &e.Region); err != nil {
+		var e UserIndexEntry
+		if err := rows.Scan(&e.UID, &e.Region, &e.EmailHash); err != nil {
 			return nil, fmt.Errorf("scan user index entry: %w", err)
 		}
 		entries = append(entries, e)
