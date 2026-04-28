@@ -462,7 +462,7 @@ func (f *FeedGenerator) toFeedItems(ctx context.Context, posts []GlobalIndexPost
 	items := make([]FeedItem, 0, len(posts))
 	for _, p := range posts {
 		item := FeedItem{
-			PostID:         p.PostID,
+			PostID:         p.PostSlug, // Use globally unique Snowflake slug
 			AuthorID:       p.AuthorID,
 			ContentPreview: p.ContentPreview,
 		}

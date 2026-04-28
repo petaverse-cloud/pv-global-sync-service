@@ -43,6 +43,7 @@ func NewGlobalIndexService(db *pgxpool.Pool, log *logger.Logger) *GlobalIndexSer
 }
 
 // InsertPost inserts a new post into the global index.
+// Uses post_slug (globally unique Snowflake ID) as the conflict key — upsert on collision.
 func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	now := time.Now().UTC()
 
@@ -58,7 +59,19 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 			$10, $11, $12, $13, $14,
 			$15, $16, $17
 		)
-		ON CONFLICT (post_id) DO NOTHING
+		ON CONFLICT (post_slug) DO UPDATE SET
+			post_id = EXCLUDED.post_id,
+			author_id = EXCLUDED.author_id,
+			author_region = EXCLUDED.author_region,
+			content_preview = EXCLUDED.content_preview,
+			visibility = EXCLUDED.visibility,
+			hashtags = EXCLUDED.hashtags,
+			media_urls = EXCLUDED.media_urls,
+			updated_at = NOW(),
+			synced_at = NOW(),
+			author_slug = EXCLUDED.author_slug,
+			author_nickname = EXCLUDED.author_nickname,
+			author_avatar_url = EXCLUDED.author_avatar_url
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
@@ -91,11 +104,12 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 	)
 
 	if err != nil {
-		return fmt.Errorf("insert post %d: %w", event.Payload.PostID, err)
+		return fmt.Errorf("insert post slug=%d (region=%s): %w", event.Payload.PostSlug, event.Payload.AuthorRegion, err)
 	}
 
-	s.log.Info("Post inserted into global index",
+	s.log.Info("Post upserted into global index",
 		logger.Int64("post_id", event.Payload.PostID),
+		logger.Int64("post_slug", event.Payload.PostSlug),
 		logger.String("region", string(event.Payload.AuthorRegion)),
 		logger.String("visibility", string(event.Payload.Visibility)),
 	)
@@ -103,7 +117,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 	return nil
 }
 
-// UpdatePost updates an existing post in the global index.
+// UpdatePost updates an existing post in the global index (lookup by post_slug).
 func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	query := `
 		UPDATE global_post_index
@@ -113,7 +127,7 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 			media_urls = $4,
 			updated_at = NOW(),
 			synced_at = NOW()
-		WHERE post_id = $5
+		WHERE post_slug = $5
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
@@ -122,44 +136,44 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 		event.Payload.Visibility,
 		hashtags,
 		event.Payload.MediaURLs,
-		event.Payload.PostID,
+		event.Payload.PostSlug,
 	)
 	if err != nil {
-		return fmt.Errorf("update post %d: %w", event.Payload.PostID, err)
+		return fmt.Errorf("update post slug=%d: %w", event.Payload.PostSlug, err)
 	}
 
 	rows := result.RowsAffected()
 	if rows == 0 {
 		s.log.Warn("Post not found in global index for update, inserting instead",
-			logger.Int64("post_id", event.Payload.PostID))
+			logger.Int64("post_slug", event.Payload.PostSlug))
 		return s.InsertPost(ctx, event)
 	}
 
 	s.log.Info("Post updated in global index",
-		logger.Int64("post_id", event.Payload.PostID))
+		logger.Int64("post_slug", event.Payload.PostSlug))
 
 	return nil
 }
 
-// DeletePost removes a post from the global index (GDPR deletion).
+// DeletePost removes a post from the global index (lookup by post_slug, GDPR deletion).
 func (s *GlobalIndexService) DeletePost(ctx context.Context, event *model.CrossRegionSyncEvent) error {
-	query := `DELETE FROM global_post_index WHERE post_id = $1`
+	query := `DELETE FROM global_post_index WHERE post_slug = $1`
 
-	result, err := s.db.Exec(ctx, query, event.Payload.PostID)
+	result, err := s.db.Exec(ctx, query, event.Payload.PostSlug)
 	if err != nil {
-		return fmt.Errorf("delete post %d: %w", event.Payload.PostID, err)
+		return fmt.Errorf("delete post slug=%d: %w", event.Payload.PostSlug, err)
 	}
 
 	rows := result.RowsAffected()
 	s.log.Info("Post deleted from global index",
-		logger.Int64("post_id", event.Payload.PostID),
+		logger.Int64("post_slug", event.Payload.PostSlug),
 		logger.Int64("rows_affected", rows))
 
 	return nil
 }
 
-// UpdateStats updates engagement counts for a post.
-func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, likes, comments, shares, views int) error {
+// UpdateStats updates engagement counts for a post (lookup by post_slug).
+func (s *GlobalIndexService) UpdateStats(ctx context.Context, postSlug int64, likes, comments, shares, views int) error {
 	query := `
 		UPDATE global_post_index
 		SET likes_count = $1,
@@ -167,15 +181,15 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postID int64, like
 			shares_count = $3,
 			views_count = $4,
 			updated_at = NOW()
-		WHERE post_id = $5
+		WHERE post_slug = $5
 	`
 
-	_, err := s.db.Exec(ctx, query, likes, comments, shares, views, postID)
+	_, err := s.db.Exec(ctx, query, likes, comments, shares, views, postSlug)
 	return err
 }
 
-// GetPost retrieves a post from the global index.
-func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.GlobalPostIndex, error) {
+// GetPost retrieves a post from the global index by its globally unique post_slug.
+func (s *GlobalIndexService) GetPost(ctx context.Context, postSlug int64) (*model.GlobalPostIndex, error) {
 	query := `
 		SELECT post_id, COALESCE(post_slug, 0), author_id, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
@@ -183,7 +197,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
 		       author_slug, author_nickname, author_avatar_url
 		FROM global_post_index
-		WHERE post_id = $1
+		WHERE post_slug = $1
 	`
 
 	var post model.GlobalPostIndex
@@ -191,7 +205,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 	var hashtags, mentions pgtypeArray
 	var mediaURLsStr string
 
-	err := s.db.QueryRow(ctx, query, postID).Scan(
+	err := s.db.QueryRow(ctx, query, postSlug).Scan(
 		&post.PostID, &post.PostSlug, &post.AuthorID, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
 		&hashtags, &mentions, &mediaURLsStr,
@@ -204,7 +218,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postID int64) (*model.
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get post %d: %w", postID, err)
+		return nil, fmt.Errorf("get post slug=%d: %w", postSlug, err)
 	}
 
 	post.CreatedAt = createdAt
@@ -489,14 +503,10 @@ func (s *GlobalIndexService) UpsertUserIndex(ctx context.Context, uid int64, reg
 	return err
 }
 
-// FindRegionByUID returns the home region of a user identified by their Snowflake uid (slug).
-func (s *GlobalIndexService) FindRegionByUID(ctx context.Context, uid int64) (string, error) {
-	var region string
-	err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE uid = $1", uid).Scan(&region)
-	if err == pgx.ErrNoRows {
-		return "", nil
-	}
-	return region, err
+// GetPostBySlug retrieves a post from the global index by its globally unique post_slug.
+// Alias for GetPost — both now look up by post_slug.
+func (s *GlobalIndexService) GetPostBySlug(ctx context.Context, postSlug int64) (*model.GlobalPostIndex, error) {
+	return s.GetPost(ctx, postSlug)
 }
 
 // FindRegionByEmailHash returns the region of a user identified by email_hash.
@@ -508,72 +518,44 @@ func (s *GlobalIndexService) FindRegionByEmailHash(ctx context.Context, emailHas
 	}
 	return region, err
 }
-
-// UserIndexEntry is a single row from users_global_index.
-type UserIndexEntry struct {
-	UID       int64
-	Region    string
-	EmailHash *string
+func (s *GlobalIndexService) FindRegionByUID(ctx context.Context, uid int64) (string, error) {
+	var region string
+	err := s.db.QueryRow(ctx, "SELECT region FROM users_global_index WHERE uid = $1", uid).Scan(&region)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return region, err
 }
 
-// GetAllUserIndexEntries returns all user index entries for cross-cluster reconciliation.
-func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]UserIndexEntry, error) {
-	rows, err := s.db.Query(ctx, "SELECT uid, region, email_hash FROM users_global_index")
+// GetAllUserIndexEntries returns all user index entries (email_hash, region, uid).
+// Used for cross-cluster reconciliation.
+func (s *GlobalIndexService) GetAllUserIndexEntries(ctx context.Context) ([]struct {
+	UID       int64
+	EmailHash *string
+	Region    string
+}, error) {
+	query := `SELECT uid, email_hash, region FROM users_global_index ORDER BY uid`
+	rows, err := s.db.Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("query all user index entries: %w", err)
+		return nil, fmt.Errorf("query user index entries: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []UserIndexEntry
+	var entries []struct {
+		UID       int64
+		EmailHash *string
+		Region    string
+	}
 	for rows.Next() {
-		var e UserIndexEntry
-		if err := rows.Scan(&e.UID, &e.Region, &e.EmailHash); err != nil {
+		var e struct {
+			UID       int64
+			EmailHash *string
+			Region    string
+		}
+		if err := rows.Scan(&e.UID, &e.EmailHash, &e.Region); err != nil {
 			return nil, fmt.Errorf("scan user index entry: %w", err)
 		}
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
-}
-
-// GetPostBySlug retrieves a post from the global index by its globally unique Snowflake ID.
-func (s *GlobalIndexService) GetPostBySlug(ctx context.Context, postSlug int64) (*model.GlobalPostIndex, error) {
-	query := `
-		SELECT post_id, COALESCE(post_slug, 0), author_id, author_region, content_preview, visibility,
-		       COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
-		       likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
-		       author_slug, author_nickname, author_avatar_url
-		FROM global_post_index
-		WHERE post_slug = $1
-	`
-
-	var post model.GlobalPostIndex
-	var createdAt, syncedAt time.Time
-	var mediaURLsStr string
-
-	err := s.db.QueryRow(ctx, query, postSlug).Scan(
-		&post.PostID, &post.PostSlug, &post.AuthorID, &post.AuthorRegion,
-		&post.ContentPreview, &post.Visibility,
-		&mediaURLsStr,
-		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
-		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
-		&createdAt, &syncedAt,
-		&post.AuthorSlug, &post.AuthorNickname, &post.AuthorAvatarURL,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("get post by slug %d: %w", postSlug, err)
-	}
-
-	post.CreatedAt = createdAt
-	post.SyncedAt = syncedAt
-
-	// Parse media_urls from comma-separated string
-	if mediaURLsStr != "" {
-		post.MediaURLs = strings.Split(mediaURLsStr, ",")
-	}
-
-	return &post, nil
 }

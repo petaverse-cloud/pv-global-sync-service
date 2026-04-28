@@ -170,6 +170,7 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 
 // handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
 func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
+	postSlug := event.Payload.PostSlug
 	postID := event.Payload.PostID
 
 	var likes, comments, favorites, views int
@@ -180,12 +181,13 @@ func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.Cros
 		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
 	}
 
-	if err := c.indexSvc.UpdateStats(ctx, postID, likes, comments, favorites, views); err != nil {
-		return fmt.Errorf("update stats for post %d in global index: %w", postID, err)
+	if err := c.indexSvc.UpdateStats(ctx, postSlug, likes, comments, favorites, views); err != nil {
+		return fmt.Errorf("update stats for post slug=%d in global index: %w", postSlug, err)
 	}
 
 	c.log.Info("Post stats updated in global index",
 		logger.Int64("post_id", postID),
+		logger.Int64("post_slug", postSlug),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
 		logger.Int("favorites", favorites),
