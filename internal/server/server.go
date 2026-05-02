@@ -37,6 +37,7 @@ type Server struct {
 
 	// Services
 	IndexSvc      *service.GlobalIndexService
+	TagIndexSvc   *service.GlobalTagIndexService
 	AuditSvc      *service.AuditLogService
 	EventLogSvc   *service.SyncEventLogService
 	GDPRChecker   *service.GDPRChecker
@@ -128,6 +129,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	// --- Services ---
 	auditSvc := service.NewAuditLogService(db)
 	indexSvc := service.NewGlobalIndexService(db.GlobalIndex(), log)
+	tagIndexSvc := service.NewGlobalTagIndexService(db.GlobalIndex(), log)
 	eventLogSvc := service.NewSyncEventLogService(db, redis, log)
 	gdprChecker := service.NewGDPRChecker(db, redis, auditSvc, log)
 
@@ -161,7 +163,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	}
 
 	syncHandler := handler.NewSyncHandler(
-		syncConsumer, eventLogSvc, gdprChecker, indexSvc, auditSvc, feedGenerator, db.RegionalDB(), crossSyncSvc, log,
+		syncConsumer, eventLogSvc, gdprChecker, indexSvc, tagIndexSvc, auditSvc, feedGenerator, db.RegionalDB(), crossSyncSvc, log,
 	)
 
 	feedHandler := handler.NewFeedHandler(feedGenerator, log)
@@ -172,7 +174,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	registerRoutes(r, db, redis, syncHandler, feedHandler, indexSvc, pm, log)
+	registerRoutes(r, db, redis, syncHandler, feedHandler, indexSvc, tagIndexSvc, pm, log)
 
 	s := &Server{
 		cfg:    cfg,
@@ -202,7 +204,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Server, error) {
 }
 
 // registerRoutes sets up all HTTP routes
-func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, indexSvc *service.GlobalIndexService, pm *peer.PeerManager, log *logger.Logger) {
+func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, syncHandler *handler.SyncHandler, feedHandler *handler.FeedHandler, indexSvc *service.GlobalIndexService, tagIndexSvc *service.GlobalTagIndexService, pm *peer.PeerManager, log *logger.Logger) {
 	// Health checks
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		handleHealth(w, req, db, redis, log)
@@ -229,6 +231,12 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 
 	// Feed endpoints (Phase 3)
 	r.Get("/feed/{userId}", feedHandler.HandleGetFeed)
+
+	// Tag index endpoints
+	r.Get("/index/tags/search", syncHandler.HandleSearchTags)
+	r.Get("/index/tags/popular", syncHandler.HandlePopularTags)
+	r.Get("/index/tags/{tagUid}", syncHandler.HandleGetTag)
+	r.Get("/index/tags/{tagUid}/regions", syncHandler.HandleGetTagRegions)
 }
 
 // handleHealth returns overall service health including dependencies

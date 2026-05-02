@@ -10,6 +10,11 @@ const (
 	EventTypePostUpdated      SyncEventType = "POST_UPDATED"
 	EventTypePostDeleted      SyncEventType = "POST_DELETED"
 	EventTypePostStatsUpdated SyncEventType = "POST_STATS_UPDATED"
+	// Tag events
+	EventTypeTagCreated      SyncEventType = "TAG_CREATED"
+	EventTypeTagUpdated      SyncEventType = "TAG_UPDATED"
+	EventTypeTagDeleted      SyncEventType = "TAG_DELETED"
+	EventTypeTagStatsUpdated SyncEventType = "TAG_STATS_UPDATED"
 )
 
 // Visibility represents post visibility level
@@ -64,6 +69,12 @@ type EventPayload struct {
 	MediaURLs    []string   `json:"mediaUrls,omitempty"`
 	// Author Metadata (Layer 1: Public Info)
 	AuthorProfile *AuthorProfile `json:"authorProfile,omitempty"`
+	// Tag fields (used when eventType is TAG_*)
+	TagUID          int64  `json:"tagUid,omitempty"`
+	TagName         string `json:"tagName,omitempty"`
+	TagCategoryUID  *int64 `json:"tagCategoryUid,omitempty"`
+	TagPostCount    *int64 `json:"postCount,omitempty"`
+	TagLastActiveAt string `json:"lastActiveAt,omitempty"`
 }
 
 // AuthorProfile contains public author info for feed display.
@@ -105,6 +116,19 @@ type GlobalPostIndex struct {
 	AuthorSlug      *int64  `json:"authorSlug,omitempty"`
 	AuthorNickname  *string `json:"authorNickname,omitempty"`
 	AuthorAvatarURL *string `json:"authorAvatarUrl,omitempty"`
+}
+
+// GlobalTagIndex represents a tag entry in the global index.
+// Replicates public tag metadata across regions (GDPR-compliant, no PII).
+type GlobalTagIndex struct {
+	TagUID        int64      `json:"tagUid"`
+	Name          string     `json:"name"`
+	HomeRegion    string     `json:"homeRegion"`
+	CategoryUID   *int64     `json:"categoryUid,omitempty"`
+	PostCount     int64      `json:"postCount"`
+	LastActiveAt  *time.Time `json:"lastActiveAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 // FeedItem represents an item in a user's feed

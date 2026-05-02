@@ -25,6 +25,7 @@ type SyncHandler struct {
 	eventLog      *service.SyncEventLogService
 	gdprChecker   *service.GDPRChecker
 	indexSvc      *service.GlobalIndexService
+	tagIndexSvc   *service.GlobalTagIndexService
 	auditSvc      *service.AuditLogService
 	feedGenerator *service.FeedGenerator
 	regionalDB    *pgxpool.Pool
@@ -38,6 +39,7 @@ func NewSyncHandler(
 	eventLog *service.SyncEventLogService,
 	gdprChecker *service.GDPRChecker,
 	indexSvc *service.GlobalIndexService,
+	tagIndexSvc *service.GlobalTagIndexService,
 	auditSvc *service.AuditLogService,
 	feedGenerator *service.FeedGenerator,
 	regionalDB *pgxpool.Pool,
@@ -49,6 +51,7 @@ func NewSyncHandler(
 		eventLog:      eventLog,
 		gdprChecker:   gdprChecker,
 		indexSvc:      indexSvc,
+		tagIndexSvc:   tagIndexSvc,
 		auditSvc:      auditSvc,
 		feedGenerator: feedGenerator,
 		regionalDB:    regionalDB,
@@ -255,6 +258,12 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 		return nil
 	case model.EventTypePostStatsUpdated:
 		return h.handleStatsUpdated(ctx, event)
+	case model.EventTypeTagCreated, model.EventTypeTagUpdated:
+		return h.tagIndexSvc.UpsertTag(ctx, event)
+	case model.EventTypeTagDeleted:
+		return h.tagIndexSvc.DeleteTag(ctx, event)
+	case model.EventTypeTagStatsUpdated:
+		return h.tagIndexSvc.UpdateStats(ctx, event.Payload.TagUID, *event.Payload.TagPostCount)
 	default:
 		return nil
 	}
@@ -336,4 +345,93 @@ func (h *SyncHandler) HandleGetPostBySlug(w http.ResponseWriter, r *http.Request
 	if err := json.NewEncoder(w).Encode(post); err != nil {
 		h.log.Error("Failed to encode post", logger.Error(err))
 	}
+}
+
+// HandleSearchTags handles GET /index/tags/search?keyword=...&limit=...
+func (h *SyncHandler) HandleSearchTags(w http.ResponseWriter, r *http.Request) {
+	keyword := r.URL.Query().Get("keyword")
+	limit := parseIntParam(r, "limit", 20)
+
+	tags, err := h.tagIndexSvc.SearchTags(r.Context(), keyword, limit)
+	if err != nil {
+		h.log.Error("Search tags failed", logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "search failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"items": tags})
+}
+
+// HandlePopularTags handles GET /index/tags/popular?limit=...
+func (h *SyncHandler) HandlePopularTags(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntParam(r, "limit", 20)
+
+	tags, err := h.tagIndexSvc.GetPopularTags(r.Context(), limit)
+	if err != nil {
+		h.log.Error("Get popular tags failed", logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"items": tags})
+}
+
+// HandleGetTag handles GET /index/tags/{tagUid}
+func (h *SyncHandler) HandleGetTag(w http.ResponseWriter, r *http.Request) {
+	tagUIDStr := chi.URLParam(r, "tagUid")
+	tagUID, err := parseInt64(tagUIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tagUid")
+		return
+	}
+
+	tag, err := h.tagIndexSvc.GetTagByUID(r.Context(), tagUID)
+	if err != nil {
+		h.log.Error("Get tag failed", logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "failed")
+		return
+	}
+	if tag == nil {
+		writeError(w, http.StatusNotFound, "tag not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, tag)
+}
+
+// HandleGetTagRegions handles GET /index/tags/{tagUid}/regions
+func (h *SyncHandler) HandleGetTagRegions(w http.ResponseWriter, r *http.Request) {
+	tagUIDStr := chi.URLParam(r, "tagUid")
+	tagUID, err := parseInt64(tagUIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tagUid")
+		return
+	}
+
+	regions, err := h.tagIndexSvc.GetRegionsForTag(r.Context(), tagUID)
+	if err != nil {
+		h.log.Error("Get tag regions failed", logger.Error(err))
+		writeError(w, http.StatusInternalServerError, "failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"regions": regions})
+}
+
+func parseIntParam(r *http.Request, name string, defaultVal int) int {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return defaultVal
+	}
+	n, err := parseInt64(s)
+	if err != nil || n < 1 {
+		return defaultVal
+	}
+	return int(n)
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }
