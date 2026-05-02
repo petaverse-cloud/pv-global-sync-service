@@ -740,3 +740,92 @@ func TestEventMetadataJSONRoundtrip(t *testing.T) {
 		t.Errorf("CrossBorderOK = %v, want %v", decoded.CrossBorderOK, meta.CrossBorderOK)
 	}
 }
+
+func TestTagEventRoundtrip(t *testing.T) {
+	event := CrossRegionSyncEvent{
+		EventID:      "evt_tag_test",
+		EventType:    EventTypeTagCreated,
+		SourceRegion: RegionSEA,
+		TargetRegion: RegionEU,
+		Timestamp:    1712736000,
+		Payload: EventPayload{
+			TagUID:  9000000001,
+			TagName: "test-hashtag",
+			PostID:  0,
+			AuthorID: 0,
+		},
+		Metadata: EventMetadata{
+			GDPRCompliant: true,
+			UserConsent:   true,
+			DataCategory:  DataCategorySystem,
+			CrossBorderOK: true,
+		},
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Marshal TAG event error: %v", err)
+	}
+
+	var decoded CrossRegionSyncEvent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal TAG event error: %v", err)
+	}
+
+	if decoded.EventType != EventTypeTagCreated {
+		t.Errorf("EventType = %q, want %q", decoded.EventType, EventTypeTagCreated)
+	}
+	if decoded.Payload.TagUID != 9000000001 {
+		t.Errorf("TagUID = %d, want 9000000001", decoded.Payload.TagUID)
+	}
+	if decoded.Payload.TagName != "test-hashtag" {
+		t.Errorf("TagName = %q, want test-hashtag", decoded.Payload.TagName)
+	}
+}
+
+func TestTagDeletedEvent(t *testing.T) {
+	event := CrossRegionSyncEvent{
+		EventID:      "evt_tag_del",
+		EventType:    EventTypeTagDeleted,
+		SourceRegion: RegionSEA,
+		Payload: EventPayload{
+			TagUID:  9000000099,
+			TagName: "obsolete-tag",
+		},
+	}
+
+	data, _ := json.Marshal(event)
+	var decoded CrossRegionSyncEvent
+	json.Unmarshal(data, &decoded)
+
+	if decoded.EventType != EventTypeTagDeleted {
+		t.Errorf("EventType = %q, want TAG_DELETED", decoded.EventType)
+	}
+	if decoded.Payload.TagUID != 9000000099 {
+		t.Errorf("TagUID = %d, want 9000000099", decoded.Payload.TagUID)
+	}
+}
+
+func TestTagStatsUpdatedEvent(t *testing.T) {
+	pc := int64(42)
+	event := CrossRegionSyncEvent{
+		EventID:      "evt_tag_stats",
+		EventType:    EventTypeTagStatsUpdated,
+		SourceRegion: RegionEU,
+		Payload: EventPayload{
+			TagUID:       9000000050,
+			TagPostCount:  &pc,
+		},
+	}
+
+	data, _ := json.Marshal(event)
+	var decoded CrossRegionSyncEvent
+	json.Unmarshal(data, &decoded)
+
+	if decoded.EventType != EventTypeTagStatsUpdated {
+		t.Errorf("EventType = %q, want TAG_STATS_UPDATED", decoded.EventType)
+	}
+	if decoded.Payload.TagPostCount == nil || *decoded.Payload.TagPostCount != 42 {
+		t.Error("TagPostCount should be 42")
+	}
+}
