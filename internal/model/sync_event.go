@@ -61,8 +61,8 @@ type CrossRegionSyncEvent struct {
 // EventPayload contains the core data of the sync event
 type EventPayload struct {
 	PostID       int64      `json:"postId"`
-	PostSlug     int64      `json:"postSlug,omitempty"` // Globally unique Snowflake ID
-	AuthorID     int64      `json:"authorId"`
+	PostUid      int64      `json:"postUid,omitempty"` // Globally unique Snowflake uid
+	AuthorUid    int64      `json:"authorUid"`
 	AuthorRegion Region     `json:"authorRegion"`
 	Visibility   Visibility `json:"visibility"`
 	Content      string     `json:"content,omitempty"`
@@ -79,7 +79,7 @@ type EventPayload struct {
 
 // AuthorProfile contains public author info for feed display.
 type AuthorProfile struct {
-	Slug      int64  `json:"slug"`
+	Uid       int64  `json:"uid"`
 	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatarUrl"`
 }
@@ -95,8 +95,8 @@ type EventMetadata struct {
 // GlobalPostIndex represents a post entry in the global index
 type GlobalPostIndex struct {
 	PostID         int64     `json:"postId"`
-	PostSlug       int64     `json:"postSlug,omitempty"` // Globally unique Snowflake ID for cross-region lookup
-	AuthorID       int64     `json:"authorId"`
+	PostUid        int64     `json:"postUid,omitempty"` // Globally unique Snowflake uid for cross-region lookup
+	AuthorUid      int64     `json:"authorUid"`
 	AuthorRegion   Region    `json:"authorRegion"`
 	ContentPreview string    `json:"contentPreview"`
 	Visibility     string    `json:"visibility"`
@@ -113,7 +113,6 @@ type GlobalPostIndex struct {
 	CreatedAt      time.Time `json:"createdAt"`
 	SyncedAt       time.Time `json:"syncedAt"`
 	// Author Metadata (Layer 1: Public Info) - Nullable
-	AuthorSlug      *int64  `json:"authorSlug,omitempty"`
 	AuthorNickname  *string `json:"authorNickname,omitempty"`
 	AuthorAvatarURL *string `json:"authorAvatarUrl,omitempty"`
 }

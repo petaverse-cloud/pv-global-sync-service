@@ -503,8 +503,8 @@ func TestHandleGetFeed_ResponseStructure(t *testing.T) {
 	log, _ := logger.New("warn", "console")
 	mock := &mockFeedGenerator{
 		items: []service.FeedItem{
-			{PostID: 1, AuthorID: 10, Score: 0.95},
-			{PostID: 2, AuthorID: 11, Score: 0.85},
+			{PostUid: 1, AuthorUid: 10, Score: 0.95},
+			{PostUid: 2, AuthorUid: 11, Score: 0.85},
 		},
 		nextCursor: "page2",
 		hasMore:    true,

@@ -27,7 +27,7 @@ func testEvent(id string) *model.CrossRegionSyncEvent {
 		Timestamp:    time.Now().UnixMilli(),
 		Payload: model.EventPayload{
 			PostID:       100,
-			AuthorID:     1,
+			AuthorUid:     1,
 			AuthorRegion: model.RegionNA,
 			Visibility:   model.VisibilityGlobal,
 			Content:      "Test post",

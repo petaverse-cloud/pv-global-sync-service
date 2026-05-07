@@ -237,7 +237,7 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 			return err
 		}
 		// Trigger feed generation after successful insert
-		if err := h.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorID, event.Payload.PostID); err != nil {
+		if err := h.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostID); err != nil {
 			h.log.Error("Feed generation failed, but post was synced",
 				logger.Int64("post_id", event.Payload.PostID),
 				logger.Error(err))
@@ -271,7 +271,7 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 
 // handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
 func (h *SyncHandler) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
-	postSlug := event.Payload.PostSlug
+	postSlug := event.Payload.PostUid
 	postID := event.Payload.PostID
 
 	var likes, comments, favorites, views int
@@ -290,12 +290,12 @@ func (h *SyncHandler) handleStatsUpdated(ctx context.Context, event *model.Cross
 	}
 
 	if err := h.indexSvc.UpdateStats(ctx, postSlug, likes, comments, favorites, views); err != nil {
-		return fmt.Errorf("update stats for post slug=%d in global index: %w", postSlug, err)
+		return fmt.Errorf("update stats for post uid=%d in global index: %w", postSlug, err)
 	}
 
 	h.log.Info("Post stats updated in global index",
 		logger.Int64("post_id", postID),
-		logger.Int64("post_slug", postSlug),
+		logger.Int64("post_uid", postSlug),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
 		logger.Int("favorites", favorites),
@@ -313,24 +313,24 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-// HandleGetPostBySlug handles GET /index/posts/slug/:slug for querying the global index by Snowflake ID.
-func (h *SyncHandler) HandleGetPostBySlug(w http.ResponseWriter, r *http.Request) {
-	slugStr := chi.URLParam(r, "slug")
-	if slugStr == "" {
-		writeError(w, http.StatusBadRequest, "missing slug")
+// HandleGetPostByUid handles GET /index/posts/uid/:uid for querying the global index by Snowflake ID.
+func (h *SyncHandler) HandleGetPostByUid(w http.ResponseWriter, r *http.Request) {
+	uidStr := chi.URLParam(r, "uid")
+	if uidStr == "" {
+		writeError(w, http.StatusBadRequest, "missing uid")
 		return
 	}
 
-	slug, err := parseInt64(slugStr)
+	uid, err := parseInt64(uidStr)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid slug")
+		writeError(w, http.StatusBadRequest, "invalid uid")
 		return
 	}
 
-	post, err := h.indexSvc.GetPostBySlug(r.Context(), slug)
+	post, err := h.indexSvc.GetPostByUid(r.Context(), uid)
 	if err != nil {
-		h.log.Error("Failed to get post by slug",
-			logger.Int64("post_slug", slug),
+		h.log.Error("Failed to get post by uid",
+			logger.Int64("post_uid", uid),
 			logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "database error")
 		return

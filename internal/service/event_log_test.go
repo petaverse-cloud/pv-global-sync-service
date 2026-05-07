@@ -205,7 +205,7 @@ func TestParseEvent_FieldVerification(t *testing.T) {
 		"timestamp": 1700000000,
 		"payload": {
 			"postId": 9876,
-			"authorId": 5432,
+			"authorUid": 5432,
 			"authorRegion": "NA",
 			"visibility": "FOLLOWERS",
 			"content": "updated content here"
@@ -247,8 +247,8 @@ func TestParseEvent_FieldVerification(t *testing.T) {
 	if event.Payload.PostID != 9876 {
 		t.Errorf("Payload.PostID = %d, want 9876", event.Payload.PostID)
 	}
-	if event.Payload.AuthorID != 5432 {
-		t.Errorf("Payload.AuthorID = %d, want 5432", event.Payload.AuthorID)
+	if event.Payload.AuthorUid != 5432 {
+		t.Errorf("Payload.AuthorUid = %d, want 5432", event.Payload.AuthorUid)
 	}
 	if event.Payload.AuthorRegion != model.RegionNA {
 		t.Errorf("Payload.AuthorRegion = %q, want %q", event.Payload.AuthorRegion, model.RegionNA)

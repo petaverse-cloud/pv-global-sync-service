@@ -144,7 +144,7 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 			return err
 		}
 		// Trigger feed generation after successful insert
-		if err := c.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorID, event.Payload.PostID); err != nil {
+		if err := c.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostID); err != nil {
 			c.log.Error("Feed generation failed, but post was synced",
 				logger.Int64("post_id", event.Payload.PostID),
 				logger.Error(err))
@@ -170,7 +170,7 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 
 // handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
 func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
-	postSlug := event.Payload.PostSlug
+	postUid := event.Payload.PostUid
 	postID := event.Payload.PostID
 
 	var likes, comments, favorites, views int
@@ -181,13 +181,13 @@ func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.Cros
 		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
 	}
 
-	if err := c.indexSvc.UpdateStats(ctx, postSlug, likes, comments, favorites, views); err != nil {
-		return fmt.Errorf("update stats for post slug=%d in global index: %w", postSlug, err)
+	if err := c.indexSvc.UpdateStats(ctx, postUid, likes, comments, favorites, views); err != nil {
+		return fmt.Errorf("update stats for post uid=%d in global index: %w", postUid, err)
 	}
 
 	c.log.Info("Post stats updated in global index",
 		logger.Int64("post_id", postID),
-		logger.Int64("post_slug", postSlug),
+		logger.Int64("post_slug", postUid),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
 		logger.Int("favorites", favorites),

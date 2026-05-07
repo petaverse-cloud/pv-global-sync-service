@@ -220,7 +220,7 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 
 	// Global index query (Phase 2)
 	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
-	r.Get("/index/posts/slug/{slug}", syncHandler.HandleGetPostBySlug)
+	r.Get("/index/posts/uid/{uid}", syncHandler.HandleGetPostByUid)
 
 	// User Index endpoints (Phase 4)
 	userIndexHandler := handler.NewUserIndexHandler(indexSvc, pm, log)

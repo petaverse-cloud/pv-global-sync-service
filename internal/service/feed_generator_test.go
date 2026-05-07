@@ -130,10 +130,13 @@ func TestToFeedItems_ZeroCounts(t *testing.T) {
 	fg := &FeedGenerator{}
 	now := time.Now().UTC()
 
+	author100 := int64(100)
+	author200 := int64(200)
+
 	posts := []GlobalIndexPost{
 		{
-			PostID:         1,
-			AuthorID:       100,
+			PostUid:        1,
+			AuthorUid:      author100,
 			ContentPreview: "hello world",
 			LikesCount:     0,
 			CommentsCount:  0,
@@ -142,8 +145,8 @@ func TestToFeedItems_ZeroCounts(t *testing.T) {
 			CreatedAt:      now,
 		},
 		{
-			PostID:         2,
-			AuthorID:       200,
+			PostUid:        2,
+			AuthorUid:      author200,
 			ContentPreview: "second post",
 			LikesCount:     0,
 			CommentsCount:  0,
@@ -160,11 +163,11 @@ func TestToFeedItems_ZeroCounts(t *testing.T) {
 	}
 
 	// Verify first item (fresh post)
-	if items[0].PostID != 1 {
-		t.Errorf("item[0].PostID = %d, want 1", items[0].PostID)
+	if items[0].PostUid != 1 {
+		t.Errorf("item[0].PostUid = %d, want 1", items[0].PostUid)
 	}
-	if items[0].AuthorID != 100 {
-		t.Errorf("item[0].AuthorID = %d, want 100", items[0].AuthorID)
+	if items[0].AuthorUid != 100 {
+		t.Errorf("item[0].AuthorUid = %d, want 100", items[0].AuthorUid)
 	}
 	if items[0].ContentPreview != "hello world" {
 		t.Errorf("item[0].ContentPreview = %q, want \"hello world\"", items[0].ContentPreview)
@@ -184,8 +187,8 @@ func TestToFeedItems_ZeroCounts(t *testing.T) {
 	}
 
 	// Verify second item (1 hour old, should have lower time decay)
-	if items[1].PostID != 2 {
-		t.Errorf("item[1].PostID = %d, want 2", items[1].PostID)
+	if items[1].PostUid != 2 {
+		t.Errorf("item[1].PostUid = %d, want 2", items[1].PostUid)
 	}
 	// 1 hour old: timeDecay = exp(-0.693*1/6) ~ 0.89, so score should be lower than fresh
 	if items[1].Score >= items[0].Score {

@@ -15,7 +15,7 @@ func TestCrossRegionSyncEventJSON(t *testing.T) {
 		Timestamp:    1712736000,
 		Payload: EventPayload{
 			PostID:       42,
-			AuthorID:     7,
+			AuthorUid:     7,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
 			Content:      "Hello world #test",
@@ -149,7 +149,7 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 
 	idx := GlobalPostIndex{
 		PostID:         99,
-		AuthorID:       5,
+		AuthorUid:       5,
 		AuthorRegion:   RegionNA,
 		ContentPreview: "Hello world #test @alice",
 		Visibility:     string(VisibilityGlobal),
@@ -180,8 +180,8 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 	if decoded.PostID != idx.PostID {
 		t.Errorf("PostID = %d, want %d", decoded.PostID, idx.PostID)
 	}
-	if decoded.AuthorID != idx.AuthorID {
-		t.Errorf("AuthorID = %d, want %d", decoded.AuthorID, idx.AuthorID)
+	if decoded.AuthorUid != idx.AuthorUid {
+		t.Errorf("AuthorUid = %d, want %d", decoded.AuthorUid, idx.AuthorUid)
 	}
 	if decoded.AuthorRegion != idx.AuthorRegion {
 		t.Errorf("AuthorRegion = %q, want %q", decoded.AuthorRegion, idx.AuthorRegion)
@@ -253,7 +253,7 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 func TestGlobalPostIndexJSONWithEmptySlices(t *testing.T) {
 	idx := GlobalPostIndex{
 		PostID:       1,
-		AuthorID:     10,
+		AuthorUid:     10,
 		AuthorRegion: RegionEU,
 		Visibility:   string(VisibilityPrivate),
 		Hashtags:     []string{},
@@ -389,7 +389,7 @@ func TestCrossRegionSyncEventWithEmptyMediaURLs(t *testing.T) {
 		Timestamp:    1712736000,
 		Payload: EventPayload{
 			PostID:       100,
-			AuthorID:     8,
+			AuthorUid:     8,
 			AuthorRegion: RegionNA,
 			Visibility:   VisibilityRegional,
 			Content:      "No media post",
@@ -440,7 +440,7 @@ func TestCrossRegionSyncEventWithMissingOptionalFields(t *testing.T) {
 		Timestamp:    1712800000,
 		Payload: EventPayload{
 			PostID:       200,
-			AuthorID:     9,
+			AuthorUid:     9,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityFollowers,
 			// Content and MediaURLs intentionally left zero/empty
@@ -540,8 +540,8 @@ func TestGlobalPostIndexZeroValue(t *testing.T) {
 	if decoded.PostID != 0 {
 		t.Errorf("zero PostID = %d, want 0", decoded.PostID)
 	}
-	if decoded.AuthorID != 0 {
-		t.Errorf("zero AuthorID = %d, want 0", decoded.AuthorID)
+	if decoded.AuthorUid != 0 {
+		t.Errorf("zero AuthorUid = %d, want 0", decoded.AuthorUid)
 	}
 	if decoded.ContentPreview != "" {
 		t.Errorf("zero ContentPreview = %q, want empty", decoded.ContentPreview)
@@ -596,7 +596,7 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 		Timestamp:    1712900000,
 		Payload: EventPayload{
 			PostID:       500,
-			AuthorID:     50,
+			AuthorUid:     50,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
 			Content:      string(largeContent),
@@ -635,7 +635,7 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 	idx := GlobalPostIndex{
 		PostID:       2,
-		AuthorID:     20,
+		AuthorUid:     20,
 		AuthorRegion: RegionNA,
 		Visibility:   string(VisibilityGlobal),
 		Hashtags:     nil,
@@ -669,7 +669,7 @@ func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 func TestEventPayloadJSONRoundtrip(t *testing.T) {
 	payload := EventPayload{
 		PostID:       777,
-		AuthorID:     888,
+		AuthorUid:     888,
 		AuthorRegion: RegionNA,
 		Visibility:   VisibilityPrivate,
 		Content:      "Secret post",
@@ -689,8 +689,8 @@ func TestEventPayloadJSONRoundtrip(t *testing.T) {
 	if decoded.PostID != payload.PostID {
 		t.Errorf("PostID = %d, want %d", decoded.PostID, payload.PostID)
 	}
-	if decoded.AuthorID != payload.AuthorID {
-		t.Errorf("AuthorID = %d, want %d", decoded.AuthorID, payload.AuthorID)
+	if decoded.AuthorUid != payload.AuthorUid {
+		t.Errorf("AuthorUid = %d, want %d", decoded.AuthorUid, payload.AuthorUid)
 	}
 	if decoded.AuthorRegion != payload.AuthorRegion {
 		t.Errorf("AuthorRegion = %q, want %q", decoded.AuthorRegion, payload.AuthorRegion)

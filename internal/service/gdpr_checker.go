@@ -121,7 +121,7 @@ func (c *GDPRChecker) CheckUserConsent(ctx context.Context, userID int64) (bool,
 
 	// Query regional DB
 	var consent bool
-	query := `SELECT COALESCE(cross_border_transfer_allowed, false) FROM users WHERE user_id = $1`
+	query := `SELECT COALESCE(cross_border_transfer_allowed, false) FROM users WHERE uid = $1`
 	row := c.db.RegionalDB().QueryRow(ctx, query, userID)
 	if err := row.Scan(&consent); err != nil {
 		return false, fmt.Errorf("query consent for user %d: %w", userID, err)
@@ -146,7 +146,7 @@ func (c *GDPRChecker) logSyncDecision(event *model.CrossRegionSyncEvent, result 
 		"allowed", result.Allowed,
 		"reason", result.Reason,
 		"post_id", event.Payload.PostID,
-		"author_id", event.Payload.AuthorID,
+		"author_id", event.Payload.AuthorUid,
 	)
 }
 
@@ -178,7 +178,7 @@ func (a *AuditLogService) Log(ctx context.Context, event *model.CrossRegionSyncE
 
 	_, err := a.db.GlobalIndex().Exec(ctx, query,
 		event.EventID,
-		event.Payload.AuthorID,
+		event.Payload.AuthorUid,
 		event.SourceRegion,
 		event.TargetRegion,
 		event.Metadata.DataCategory,

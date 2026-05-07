@@ -195,7 +195,7 @@ func (f *FeedGenerator) getFollowingFeed(ctx context.Context, userID int64, curs
 	hasMore = len(posts) >= limit
 	nextCursor = ""
 	if hasMore && len(items) > 0 {
-		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostID)
+		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostUid)
 	}
 
 	return items, nextCursor, hasMore, nil
@@ -225,7 +225,7 @@ func (f *FeedGenerator) getGlobalFeed(ctx context.Context, userID int64, cursor 
 	hasMore = len(posts) >= limit
 	nextCursor = ""
 	if hasMore && len(items) > 0 {
-		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostID)
+		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostUid)
 	}
 
 	return items, nextCursor, hasMore, nil
@@ -255,7 +255,7 @@ func (f *FeedGenerator) getTrendingFeed(ctx context.Context, userID int64, curso
 	hasMore = len(posts) >= limit
 	nextCursor = ""
 	if hasMore && len(items) > 0 {
-		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostID)
+		nextCursor = fmt.Sprintf("%d", items[len(items)-1].PostUid)
 	}
 
 	return items, nextCursor, hasMore, nil
@@ -294,8 +294,8 @@ func (f *FeedGenerator) getFeedFromRedis(ctx context.Context, userID int64, feed
 			continue
 		}
 		items = append(items, FeedItem{
-			PostID: postID,
-			Score:  m.Score,
+			PostUid: postID,
+			Score:   m.Score,
 		})
 	}
 
@@ -316,7 +316,7 @@ func (f *FeedGenerator) cacheFeedItems(ctx context.Context, userID int64, feedTy
 	for i, item := range items {
 		members[i] = redis.Z{
 			Score:  item.Score,
-			Member: item.PostID,
+			Member: item.PostUid,
 		}
 	}
 	f.redis.Rdb().ZAdd(ctx, key, members...)
@@ -396,7 +396,7 @@ func (f *FeedGenerator) initialScore(createdAt time.Time) float64 {
 
 func (f *FeedGenerator) getFollowerCount(ctx context.Context, userID int64) (int, error) {
 	var count int
-	query := `SELECT followers_count FROM users WHERE user_id = $1`
+	query := `SELECT followers_count FROM users WHERE uid = $1`
 	err := f.regionalDB.RegionalDB().QueryRow(ctx, query, userID).Scan(&count)
 	if err == pgx.ErrNoRows {
 		// User not yet in Regional DB (managed by wigowago-api migrations).
@@ -446,8 +446,8 @@ func (f *FeedGenerator) getFollowingIDs(ctx context.Context, userID int64) ([]in
 
 // FeedItem represents an item in a user's feed response.
 type FeedItem struct {
-	PostID         int64   `json:"postId"`
-	AuthorID       int64   `json:"authorId"`
+	PostUid        int64   `json:"postUid"`
+	AuthorUid      int64   `json:"authorUid"`
 	AuthorName     string  `json:"authorName,omitempty"`
 	ContentPreview string  `json:"contentPreview,omitempty"`
 	Score          float64 `json:"score"`
@@ -462,8 +462,8 @@ func (f *FeedGenerator) toFeedItems(ctx context.Context, posts []GlobalIndexPost
 	items := make([]FeedItem, 0, len(posts))
 	for _, p := range posts {
 		item := FeedItem{
-			PostID:         p.PostSlug, // Use globally unique Snowflake slug
-			AuthorID:       p.AuthorID,
+			PostUid:        p.PostUid,
+			AuthorUid:      p.AuthorUid,
 			ContentPreview: p.ContentPreview,
 		}
 		item.Engagement.Likes = p.LikesCount

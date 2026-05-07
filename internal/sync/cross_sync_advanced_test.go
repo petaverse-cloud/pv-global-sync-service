@@ -279,7 +279,7 @@ func TestBroadcast_EventWithMediaUrls(t *testing.T) {
 		Timestamp:    time.Now().UnixMilli(),
 		Payload: model.EventPayload{
 			PostID:       999,
-			AuthorID:     1,
+			AuthorUid:     1,
 			AuthorRegion: model.RegionNA,
 			Visibility:   model.VisibilityGlobal,
 			Content:      "Test with media",
