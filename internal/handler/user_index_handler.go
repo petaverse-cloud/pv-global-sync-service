@@ -218,7 +218,7 @@ func (h *UserIndexHandler) HandleGetUserRegion(w http.ResponseWriter, r *http.Re
 
 	region, err := h.indexSvc.FindRegionByUID(r.Context(), uid)
 	if err != nil {
-		h.log.Error("Failed to lookup user region",		logger.Int64("uid", uid),logger.Error(err))
+		h.log.Error("Failed to lookup user region", logger.Int64("uid", uid), logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

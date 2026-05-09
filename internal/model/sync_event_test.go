@@ -14,8 +14,8 @@ func TestCrossRegionSyncEventJSON(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712736000,
 		Payload: EventPayload{
-			PostUid:     42,
-			AuthorUid:     7,
+			PostUid:      42,
+			AuthorUid:    7,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
 			Content:      "Hello world #test",
@@ -148,7 +148,7 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 	syncedAt := time.Date(2024, 4, 10, 12, 1, 0, 0, time.UTC)
 
 	idx := GlobalPostIndex{
-		AuthorUid:       5,
+		AuthorUid:      5,
 		AuthorRegion:   RegionNA,
 		ContentPreview: "Hello world #test @alice",
 		Visibility:     string(VisibilityGlobal),
@@ -251,7 +251,7 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 
 func TestGlobalPostIndexJSONWithEmptySlices(t *testing.T) {
 	idx := GlobalPostIndex{
-		AuthorUid:     10,
+		AuthorUid:    10,
 		AuthorRegion: RegionEU,
 		Visibility:   string(VisibilityPrivate),
 		Hashtags:     []string{},
@@ -302,7 +302,7 @@ func TestFeedItemJSON(t *testing.T) {
 	expires := time.Date(2024, 5, 8, 10, 0, 0, 0, time.UTC)
 
 	item := FeedItem{
-		PostUid:    456,
+		PostUid:   456,
 		FeedType:  "trending",
 		Score:     0.95,
 		CreatedAt: created,
@@ -343,7 +343,7 @@ func TestFeedItemJSONWithoutExpiresAt(t *testing.T) {
 	created := time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC)
 
 	item := FeedItem{
-		PostUid:    2,
+		PostUid:   2,
 		FeedType:  "global",
 		Score:     0.5,
 		CreatedAt: created,
@@ -384,8 +384,8 @@ func TestCrossRegionSyncEventWithEmptyMediaURLs(t *testing.T) {
 		TargetRegion: RegionEU,
 		Timestamp:    1712736000,
 		Payload: EventPayload{
-			PostUid:     100,
-			AuthorUid:     8,
+			PostUid:      100,
+			AuthorUid:    8,
 			AuthorRegion: RegionNA,
 			Visibility:   VisibilityRegional,
 			Content:      "No media post",
@@ -435,8 +435,8 @@ func TestCrossRegionSyncEventWithMissingOptionalFields(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712800000,
 		Payload: EventPayload{
-			PostUid:     200,
-			AuthorUid:     9,
+			PostUid:      200,
+			AuthorUid:    9,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityFollowers,
 			// Content and MediaURLs intentionally left zero/empty
@@ -591,8 +591,8 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712900000,
 		Payload: EventPayload{
-			PostUid:     500,
-			AuthorUid:     50,
+			PostUid:      500,
+			AuthorUid:    50,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
 			Content:      string(largeContent),
@@ -630,7 +630,7 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 
 func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 	idx := GlobalPostIndex{
-		AuthorUid:     20,
+		AuthorUid:    20,
 		AuthorRegion: RegionNA,
 		Visibility:   string(VisibilityGlobal),
 		Hashtags:     nil,
@@ -663,7 +663,7 @@ func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 
 func TestEventPayloadJSONRoundtrip(t *testing.T) {
 	payload := EventPayload{
-		AuthorUid:     888,
+		AuthorUid:    888,
 		AuthorRegion: RegionNA,
 		Visibility:   VisibilityPrivate,
 		Content:      "Secret post",
@@ -743,9 +743,9 @@ func TestTagEventRoundtrip(t *testing.T) {
 		TargetRegion: RegionEU,
 		Timestamp:    1712736000,
 		Payload: EventPayload{
-			TagUID:  9000000001,
-			TagName: "test-hashtag",
-			PostUid:  0,
+			TagUID:    9000000001,
+			TagName:   "test-hashtag",
+			PostUid:   0,
 			AuthorUid: 0,
 		},
 		Metadata: EventMetadata{
@@ -808,7 +808,7 @@ func TestTagStatsUpdatedEvent(t *testing.T) {
 		SourceRegion: RegionEU,
 		Payload: EventPayload{
 			TagUID:       9000000050,
-			TagPostCount:  &pc,
+			TagPostCount: &pc,
 		},
 	}
 

@@ -118,14 +118,14 @@ type GlobalPostIndex struct {
 // GlobalTagIndex represents a tag entry in the global index.
 // Replicates public tag metadata across regions (GDPR-compliant, no PII).
 type GlobalTagIndex struct {
-	TagUID        int64      `json:"tagUid"`
-	Name          string     `json:"name"`
-	HomeRegion    string     `json:"homeRegion"`
-	CategoryUID   *int64     `json:"categoryUid,omitempty"`
-	PostCount     int64      `json:"postCount"`
-	LastActiveAt  *time.Time `json:"lastActiveAt,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	TagUID       int64      `json:"tagUid"`
+	Name         string     `json:"name"`
+	HomeRegion   string     `json:"homeRegion"`
+	CategoryUID  *int64     `json:"categoryUid,omitempty"`
+	PostCount    int64      `json:"postCount"`
+	LastActiveAt *time.Time `json:"lastActiveAt,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 // FeedItem represents an item in a user's feed
