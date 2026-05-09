@@ -134,24 +134,24 @@ func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleGetPost handles GET /index/posts/:postId for querying the global index.
+// HandleGetPost handles GET /index/posts/:uid for querying the global index.
 func (h *SyncHandler) HandleGetPost(w http.ResponseWriter, r *http.Request) {
-	postIDStr := chi.URLParam(r, "postId")
-	if postIDStr == "" {
-		writeError(w, http.StatusBadRequest, "missing postId")
+	uidStr := chi.URLParam(r, "uid")
+	if uidStr == "" {
+		writeError(w, http.StatusBadRequest, "missing uid")
 		return
 	}
 
-	postID, err := parseInt64(postIDStr)
+	uid, err := parseInt64(uidStr)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid postId")
+		writeError(w, http.StatusBadRequest, "invalid uid")
 		return
 	}
 
-	post, err := h.indexSvc.GetPost(r.Context(), postID)
+	post, err := h.indexSvc.GetPost(r.Context(), uid)
 	if err != nil {
 		h.log.Error("Failed to get post",
-			logger.Int64("post_id", postID),
+			logger.Int64("post_uid", uid),
 			logger.Error(err))
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -237,9 +237,9 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 			return err
 		}
 		// Trigger feed generation after successful insert
-		if err := h.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostID); err != nil {
+		if err := h.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostUid); err != nil {
 			h.log.Error("Feed generation failed, but post was synced",
-				logger.Int64("post_id", event.Payload.PostID),
+				logger.Int64("post_uid", event.Payload.PostUid),
 				logger.Error(err))
 		}
 		return nil
@@ -250,9 +250,9 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 			return err
 		}
 		// Invalidate feed caches
-		if err := h.feedGenerator.HandleDeletedPost(ctx, event.Payload.PostID); err != nil {
+		if err := h.feedGenerator.HandleDeletedPost(ctx, event.Payload.PostUid); err != nil {
 			h.log.Warn("Feed cache invalidation failed",
-				logger.Int64("post_id", event.Payload.PostID),
+				logger.Int64("post_uid", event.Payload.PostUid),
 				logger.Error(err))
 		}
 		return nil
@@ -271,31 +271,29 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 
 // handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
 func (h *SyncHandler) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
-	postSlug := event.Payload.PostUid
-	postID := event.Payload.PostID
+	postUid := event.Payload.PostUid
 
 	var likes, comments, favorites, views int
 	// Note: Regional DB has favorites_count, not shares_count
-	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE post_id = $1`
-	err := h.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &favorites, &views)
+	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE uid = $1`
+	err := h.regionalDB.QueryRow(ctx, query, postUid).Scan(&likes, &comments, &favorites, &views)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// Post not in Regional DB (may have been synced from peer cluster).
 			// Stats update is not actionable — skip silently.
 			h.log.Debug("Post not found in Regional DB, skipping stats update",
-				logger.Int64("post_id", postID))
+				logger.Int64("post_uid", postUid))
 			return nil
 		}
-		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
+		return fmt.Errorf("read stats for post uid=%d from regional db: %w", postUid, err)
 	}
 
-	if err := h.indexSvc.UpdateStats(ctx, postSlug, likes, comments, favorites, views); err != nil {
-		return fmt.Errorf("update stats for post uid=%d in global index: %w", postSlug, err)
+	if err := h.indexSvc.UpdateStats(ctx, postUid, likes, comments, favorites, views); err != nil {
+		return fmt.Errorf("update stats for post uid=%d in global index: %w", postUid, err)
 	}
 
 	h.log.Info("Post stats updated in global index",
-		logger.Int64("post_id", postID),
-		logger.Int64("post_uid", postSlug),
+		logger.Int64("post_uid", postUid),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
 		logger.Int("favorites", favorites),

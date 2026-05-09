@@ -60,35 +60,35 @@ func NewFeedGenerator(db *postgres.Manager, redis *redispkg.Client, indexSvc *Gl
 
 // HandleNewPost triggers feed generation when a new post enters the global index.
 // Decides Push vs Pull based on author's follower count.
-func (f *FeedGenerator) HandleNewPost(ctx context.Context, authorID int64, postID int64) error {
-	followerCount, err := f.getFollowerCount(ctx, authorID)
+func (f *FeedGenerator) HandleNewPost(ctx context.Context, authorUid int64, postUid int64) error {
+	followerCount, err := f.getFollowerCount(ctx, authorUid)
 	if err != nil {
 		f.log.Error("Failed to get follower count for feed generation",
-			logger.Int64("author_id", authorID),
+			logger.Int64("author_uid", authorUid),
 			logger.Error(err))
 		// Fall back to pull mode (safe default)
 		return nil
 	}
 
 	if followerCount < f.pushThreshold {
-		return f.pushMode(ctx, authorID, postID, followerCount)
+		return f.pushMode(ctx, authorUid, postUid, followerCount)
 	}
 
 	f.log.Info("Using pull mode for celebrity post",
-		logger.Int64("author_id", authorID),
-		logger.Int64("post_id", postID),
+		logger.Int64("author_uid", authorUid),
+		logger.Int64("post_uid", postUid),
 		logger.Int("followers", followerCount))
 	return nil
 }
 
 // HandleDeletedPost removes the post from all feed caches.
-func (f *FeedGenerator) HandleDeletedPost(ctx context.Context, postID int64) error {
+func (f *FeedGenerator) HandleDeletedPost(ctx context.Context, postUid int64) error {
 	// Invalidate all feed types containing this post
 	// Since Redis ZSET doesn't support reverse lookup efficiently,
 	// we rely on TTL expiration. For immediate removal, we'd need
 	// a secondary index. For now, log and rely on eventual consistency.
 	f.log.Info("Post deleted from global index - feed caches will expire",
-		logger.Int64("post_id", postID))
+		logger.Int64("post_uid", postUid))
 	return nil
 }
 
@@ -113,21 +113,21 @@ func (f *FeedGenerator) GetFeed(ctx context.Context, userID int64, feedType stri
 
 // ---- Push Mode (Fan-out) ----
 
-func (f *FeedGenerator) pushMode(ctx context.Context, authorID int64, postID int64, followerCount int) error {
+func (f *FeedGenerator) pushMode(ctx context.Context, authorUid int64, postUid int64, followerCount int) error {
 	f.log.Info("Using push mode for post",
-		logger.Int64("post_id", postID),
-		logger.Int64("author_id", authorID),
+		logger.Int64("post_uid", postUid),
+		logger.Int64("author_uid", authorUid),
 		logger.Int("followers", followerCount))
 
 	// Get all followers
-	followerIDs, err := f.getFollowerIDs(ctx, authorID)
+	followerIDs, err := f.getFollowerIDs(ctx, authorUid)
 	if err != nil {
-		return fmt.Errorf("get followers for post %d: %w", postID, err)
+		return fmt.Errorf("get followers for post uid=%d: %w", postUid, err)
 	}
 
 	if len(followerIDs) == 0 {
 		f.log.Info("No followers to push feed to",
-			logger.Int64("post_id", postID))
+			logger.Int64("post_uid", postUid))
 		return nil
 	}
 
@@ -137,10 +137,10 @@ func (f *FeedGenerator) pushMode(ctx context.Context, authorID int64, postID int
 	// Push to each follower's following feed
 	successCount := 0
 	for _, followerID := range followerIDs {
-		if err := f.redis.AddToFeed(ctx, followerID, "following", postID, baseScore); err != nil {
+		if err := f.redis.AddToFeed(ctx, followerID, "following", postUid, baseScore); err != nil {
 			f.log.Error("Failed to push post to follower feed",
-				logger.Int64("follower_id", followerID),
-				logger.Int64("post_id", postID),
+				logger.Int64("follower_uid", followerID),
+				logger.Int64("post_uid", postUid),
 				logger.Error(err))
 			continue
 		}
@@ -150,7 +150,7 @@ func (f *FeedGenerator) pushMode(ctx context.Context, authorID int64, postID int
 	}
 
 	f.log.Info("Push mode complete",
-		logger.Int64("post_id", postID),
+		logger.Int64("post_uid", postUid),
 		logger.Int("total_followers", len(followerIDs)),
 		logger.Int("successful_pushes", successCount))
 
@@ -407,7 +407,7 @@ func (f *FeedGenerator) getFollowerCount(ctx context.Context, userID int64) (int
 }
 
 func (f *FeedGenerator) getFollowerIDs(ctx context.Context, userID int64) ([]int64, error) {
-	query := `SELECT follower_id FROM user_follows WHERE following_id = $1`
+	query := `SELECT follower_uid FROM user_follows WHERE following_uid = $1`
 	rows, err := f.regionalDB.RegionalDB().Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -426,7 +426,7 @@ func (f *FeedGenerator) getFollowerIDs(ctx context.Context, userID int64) ([]int
 }
 
 func (f *FeedGenerator) getFollowingIDs(ctx context.Context, userID int64) ([]int64, error) {
-	query := `SELECT following_id FROM user_follows WHERE follower_id = $1`
+	query := `SELECT following_uid FROM user_follows WHERE follower_uid = $1`
 	rows, err := f.regionalDB.RegionalDB().Query(ctx, query, userID)
 	if err != nil {
 		return nil, err

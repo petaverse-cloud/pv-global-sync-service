@@ -278,7 +278,7 @@ func TestBroadcast_EventWithMediaUrls(t *testing.T) {
 		TargetRegion: model.RegionEU,
 		Timestamp:    time.Now().UnixMilli(),
 		Payload: model.EventPayload{
-			PostID:       999,
+			PostUid:       999,
 			AuthorUid:     1,
 			AuthorRegion: model.RegionNA,
 			Visibility:   model.VisibilityGlobal,
@@ -373,8 +373,8 @@ func TestBroadcast_POSTBodyContainsCorrectJSON(t *testing.T) {
 	if received.SourceRegion != expected.SourceRegion {
 		t.Errorf("body SourceRegion = %q, want %q", received.SourceRegion, expected.SourceRegion)
 	}
-	if received.Payload.PostID != expected.Payload.PostID {
-		t.Errorf("body Payload.PostID = %d, want %d", received.Payload.PostID, expected.Payload.PostID)
+	if received.Payload.PostUid != expected.Payload.PostUid {
+		t.Errorf("body Payload.PostUid = %d, want %d", received.Payload.PostUid, expected.Payload.PostUid)
 	}
 	if received.Payload.Content != expected.Payload.Content {
 		t.Errorf("body Payload.Content = %q, want %q", received.Payload.Content, expected.Payload.Content)

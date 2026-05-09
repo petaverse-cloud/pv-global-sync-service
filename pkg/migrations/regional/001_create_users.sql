@@ -2,8 +2,7 @@
 -- Full wigowago user schema is managed by wigowago-api TypeORM migrations.
 -- This provides the subset needed by global-sync-service.
 CREATE TABLE IF NOT EXISTS users (
-    user_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    slug BIGINT NOT NULL UNIQUE,
+    uid BIGINT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     nickname VARCHAR(100),
     email VARCHAR(255) UNIQUE,

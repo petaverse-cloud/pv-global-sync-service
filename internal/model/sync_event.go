@@ -60,8 +60,7 @@ type CrossRegionSyncEvent struct {
 
 // EventPayload contains the core data of the sync event
 type EventPayload struct {
-	PostID       int64      `json:"postId"`
-	PostUid      int64      `json:"postUid,omitempty"` // Globally unique Snowflake uid
+	PostUid      int64      `json:"postUid"` // Globally unique Snowflake uid (was: postId)
 	AuthorUid    int64      `json:"authorUid"`
 	AuthorRegion Region     `json:"authorRegion"`
 	Visibility   Visibility `json:"visibility"`
@@ -94,8 +93,7 @@ type EventMetadata struct {
 
 // GlobalPostIndex represents a post entry in the global index
 type GlobalPostIndex struct {
-	PostID         int64     `json:"postId"`
-	PostUid        int64     `json:"postUid,omitempty"` // Globally unique Snowflake uid for cross-region lookup
+	PostUid        int64     `json:"postUid"` // Globally unique Snowflake uid for cross-region lookup
 	AuthorUid      int64     `json:"authorUid"`
 	AuthorRegion   Region    `json:"authorRegion"`
 	ContentPreview string    `json:"contentPreview"`
@@ -132,8 +130,7 @@ type GlobalTagIndex struct {
 
 // FeedItem represents an item in a user's feed
 type FeedItem struct {
-	UserID    int64     `json:"userId"`
-	PostID    int64     `json:"postId"`
+	PostUid   int64     `json:"postUid"`
 	FeedType  string    `json:"feedType"` // "following" | "global" | "trending"
 	Score     float64   `json:"score"`
 	CreatedAt time.Time `json:"createdAt"`

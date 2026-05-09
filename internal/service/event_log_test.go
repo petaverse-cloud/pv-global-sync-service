@@ -15,7 +15,7 @@ func TestParseEvent(t *testing.T) {
 	}{
 		{
 			name:    "valid event",
-			body:    `{"eventId":"evt1","eventType":"POST_CREATED","sourceRegion":"EU","targetRegion":"NA","timestamp":123,"payload":{"postId":1,"authorId":2,"authorRegion":"EU","visibility":"GLOBAL","content":"hello #world","mediaUrls":[]},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`,
+			body:    `{"eventId":"evt1","eventType":"POST_CREATED","sourceRegion":"EU","targetRegion":"NA","timestamp":123,"payload":{"postUid":1,"authorId":2,"authorRegion":"EU","visibility":"GLOBAL","content":"hello #world","mediaUrls":[]},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`,
 			wantErr: false,
 		},
 		{
@@ -25,16 +25,16 @@ func TestParseEvent(t *testing.T) {
 		},
 		{
 			name:    "missing eventId",
-			body:    `{"eventType":"POST_CREATED","payload":{"postId":1}}`,
+			body:    `{"eventType":"POST_CREATED","payload":{"postUid":1}}`,
 			wantErr: true,
 		},
 		{
 			name:    "missing eventType",
-			body:    `{"eventId":"evt1","payload":{"postId":1}}`,
+			body:    `{"eventId":"evt1","payload":{"postUid":1}}`,
 			wantErr: true,
 		},
 		{
-			name:    "missing postId",
+			name:    "missing postUid",
 			body:    `{"eventId":"evt1","eventType":"POST_CREATED","payload":{"authorId":2}}`,
 			wantErr: true,
 		},
@@ -115,7 +115,7 @@ func TestParseEvent_ExtraUnknownFields(t *testing.T) {
 		"targetRegion": "NA",
 		"timestamp": 999,
 		"payload": {
-			"postId": 42,
+			"postUid": 42,
 			"authorId": 7,
 			"authorRegion": "EU",
 			"visibility": "GLOBAL",
@@ -146,8 +146,8 @@ func TestParseEvent_ExtraUnknownFields(t *testing.T) {
 	if event.EventType != model.EventTypePostCreated {
 		t.Errorf("EventType = %q, want %q", event.EventType, model.EventTypePostCreated)
 	}
-	if event.Payload.PostID != 42 {
-		t.Errorf("PostID = %d, want 42", event.Payload.PostID)
+	if event.Payload.PostUid != 42 {
+		t.Errorf("PostID = %d, want 42", event.Payload.PostUid)
 	}
 	if event.Timestamp != 999 {
 		t.Errorf("Timestamp = %d, want 999", event.Timestamp)
@@ -155,7 +155,7 @@ func TestParseEvent_ExtraUnknownFields(t *testing.T) {
 }
 
 func TestParseEvent_ZeroPostID(t *testing.T) {
-	body := `{"eventId":"evt1","eventType":"POST_CREATED","payload":{"postId":0,"authorId":1}}`
+	body := `{"eventId":"evt1","eventType":"POST_CREATED","payload":{"postUid":0,"authorId":1}}`
 	event, err := ParseEvent([]byte(body))
 	if err == nil {
 		t.Fatal("ParseEvent() expected error for postId=0, got nil")
@@ -163,8 +163,8 @@ func TestParseEvent_ZeroPostID(t *testing.T) {
 	if event != nil {
 		t.Error("ParseEvent() expected nil event on error")
 	}
-	if !strings.Contains(err.Error(), "missing postId") {
-		t.Errorf("ParseEvent() error = %v, want substring %q", err, "missing postId")
+	if !strings.Contains(err.Error(), "missing postUid") {
+		t.Errorf("ParseEvent() error = %v, want substring %q", err, "missing postUid")
 	}
 }
 
@@ -181,7 +181,7 @@ func TestParseEvent_AllEventTypes(t *testing.T) {
 
 	for _, et := range eventTypes {
 		t.Run(et.name, func(t *testing.T) {
-			body := `{"eventId":"evt-type","eventType":"` + string(et.value) + `","payload":{"postId":1}}`
+			body := `{"eventId":"evt-type","eventType":"` + string(et.value) + `","payload":{"postUid":1}}`
 			event, err := ParseEvent([]byte(body))
 			if err != nil {
 				t.Fatalf("ParseEvent() unexpected error: %v", err)
@@ -204,7 +204,7 @@ func TestParseEvent_FieldVerification(t *testing.T) {
 		"targetRegion": "EU",
 		"timestamp": 1700000000,
 		"payload": {
-			"postId": 9876,
+			"postUid": 9876,
 			"authorUid": 5432,
 			"authorRegion": "NA",
 			"visibility": "FOLLOWERS",
@@ -244,8 +244,8 @@ func TestParseEvent_FieldVerification(t *testing.T) {
 	}
 
 	// Verify payload fields
-	if event.Payload.PostID != 9876 {
-		t.Errorf("Payload.PostID = %d, want 9876", event.Payload.PostID)
+	if event.Payload.PostUid != 9876 {
+		t.Errorf("Payload.PostUid = %d, want 9876", event.Payload.PostUid)
 	}
 	if event.Payload.AuthorUid != 5432 {
 		t.Errorf("Payload.AuthorUid = %d, want 5432", event.Payload.AuthorUid)
@@ -288,7 +288,7 @@ func TestParseEvent_MediaURLs(t *testing.T) {
 				"eventId": "evt-media",
 				"eventType": "POST_CREATED",
 				"payload": {
-					"postId": 1,
+					"postUid": 1,
 					"mediaUrls": ["https://cdn.example.com/img1.jpg", "https://cdn.example.com/vid1.mp4", "https://cdn.example.com/img2.png"]
 				}
 			}`,
@@ -305,7 +305,7 @@ func TestParseEvent_MediaURLs(t *testing.T) {
 				"eventId": "evt-media2",
 				"eventType": "POST_CREATED",
 				"payload": {
-					"postId": 2,
+					"postUid": 2,
 					"mediaUrls": ["https://cdn.example.com/only.jpg"]
 				}
 			}`,
@@ -318,7 +318,7 @@ func TestParseEvent_MediaURLs(t *testing.T) {
 				"eventId": "evt-media3",
 				"eventType": "POST_CREATED",
 				"payload": {
-					"postId": 3,
+					"postUid": 3,
 					"mediaUrls": []
 				}
 			}`,
@@ -331,7 +331,7 @@ func TestParseEvent_MediaURLs(t *testing.T) {
 				"eventId": "evt-media4",
 				"eventType": "POST_CREATED",
 				"payload": {
-					"postId": 4
+					"postUid": 4
 				}
 			}`,
 			wantMediaURLs: nil,
@@ -367,7 +367,7 @@ func TestParseEvent_MediaURLs(t *testing.T) {
 }
 
 func TestParseEvent_NestedEmptyPayload(t *testing.T) {
-	body := `{"eventId":"evt-nested","eventType":"POST_DELETED","payload":{"postId":100,"content":"","mediaUrls":[]}}`
+	body := `{"eventId":"evt-nested","eventType":"POST_DELETED","payload":{"postUid":100,"content":"","mediaUrls":[]}}`
 	event, err := ParseEvent([]byte(body))
 	if err != nil {
 		t.Fatalf("ParseEvent() unexpected error: %v", err)
@@ -375,8 +375,8 @@ func TestParseEvent_NestedEmptyPayload(t *testing.T) {
 	if event == nil {
 		t.Fatal("expected non-nil event")
 	}
-	if event.Payload.PostID != 100 {
-		t.Errorf("PostID = %d, want 100", event.Payload.PostID)
+	if event.Payload.PostUid != 100 {
+		t.Errorf("PostID = %d, want 100", event.Payload.PostUid)
 	}
 	if event.Payload.Content != "" {
 		t.Errorf("Content = %q, want empty", event.Payload.Content)
@@ -394,18 +394,18 @@ func TestParseEvent_WhitespaceAndZeroValues(t *testing.T) {
 	}{
 		{
 			name:   "empty string eventId",
-			body:   `{"eventId":"","eventType":"POST_CREATED","payload":{"postId":1}}`,
+			body:   `{"eventId":"","eventType":"POST_CREATED","payload":{"postUid":1}}`,
 			errSub: "missing eventId",
 		},
 		{
 			name:   "empty string eventType",
-			body:   `{"eventId":"evt1","eventType":"","payload":{"postId":1}}`,
+			body:   `{"eventId":"evt1","eventType":"","payload":{"postUid":1}}`,
 			errSub: "missing eventType",
 		},
 		{
 			name:   "missing payload entirely",
 			body:   `{"eventId":"evt1","eventType":"POST_CREATED"}`,
-			errSub: "missing postId",
+			errSub: "missing postUid",
 		},
 	}
 

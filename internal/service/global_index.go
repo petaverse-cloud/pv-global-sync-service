@@ -80,7 +80,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 	}
 
 	_, err := s.db.Exec(ctx, query,
-		event.Payload.PostID,
+		event.Payload.PostUid,
 		event.Payload.PostUid,
 		event.Payload.AuthorUid,
 		event.Payload.AuthorRegion,
@@ -102,8 +102,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 	}
 
 	s.log.Info("Post upserted into global index",
-		logger.Int64("post_id", event.Payload.PostID),
-		logger.Int64("post_slug", event.Payload.PostUid),
+		logger.Int64("post_uid", event.Payload.PostUid),
 		logger.String("region", string(event.Payload.AuthorRegion)),
 		logger.String("visibility", string(event.Payload.Visibility)),
 	)
@@ -139,12 +138,12 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 	rows := result.RowsAffected()
 	if rows == 0 {
 		s.log.Warn("Post not found in global index for update, inserting instead",
-			logger.Int64("post_slug", event.Payload.PostUid))
+			logger.Int64("post_uid", event.Payload.PostUid))
 		return s.InsertPost(ctx, event)
 	}
 
 	s.log.Info("Post updated in global index",
-		logger.Int64("post_slug", event.Payload.PostUid))
+		logger.Int64("post_uid", event.Payload.PostUid))
 
 	return nil
 }
@@ -160,7 +159,7 @@ func (s *GlobalIndexService) DeletePost(ctx context.Context, event *model.CrossR
 
 	rows := result.RowsAffected()
 	s.log.Info("Post deleted from global index",
-		logger.Int64("post_slug", event.Payload.PostUid),
+		logger.Int64("post_uid", event.Payload.PostUid),
 		logger.Int64("rows_affected", rows))
 
 	return nil
@@ -185,10 +184,11 @@ func (s *GlobalIndexService) UpdateStats(ctx context.Context, postUid int64, lik
 // GetPost retrieves a post from the global index by its globally unique post_slug.
 func (s *GlobalIndexService) GetPost(ctx context.Context, postUid int64) (*model.GlobalPostIndex, error) {
 	query := `
-		SELECT post_id, COALESCE(post_slug, 0), author_uid, author_region, content_preview, visibility,
+		SELECT COALESCE(post_slug, 0), author_uid, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at,\n		       author_nickname, author_avatar_url
+		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
+		       author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE post_slug = $1
 	`
@@ -199,7 +199,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postUid int64) (*model
 	var mediaURLsStr string
 
 	err := s.db.QueryRow(ctx, query, postUid).Scan(
-		&post.PostID, &post.PostUid, &post.AuthorUid, &post.AuthorRegion,
+		&post.PostUid, &post.AuthorUid, &post.AuthorRegion,
 		&post.ContentPreview, &post.Visibility,
 		&hashtags, &mentions, &mediaURLsStr,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
@@ -228,7 +228,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postUid int64) (*model
 // GetPostsByAuthor retrieves all global posts by a specific author.
 func (s *GlobalIndexService) GetPostsByAuthor(ctx context.Context, authorID int64, limit int) ([]model.GlobalPostIndex, error) {
 	query := `
-		SELECT post_id, author_uid, author_region, content_preview, visibility,
+		SELECT COALESCE(post_slug, 0), author_uid, author_region, content_preview, visibility,
 		       hashtags, likes_count, comments_count, shares_count, views_count,
 		       gdpr_compliant, user_consent, data_category, created_at, synced_at
 		FROM global_post_index
@@ -249,7 +249,7 @@ func (s *GlobalIndexService) GetPostsByAuthor(ctx context.Context, authorID int6
 		var createdAt, syncedAt time.Time
 		var hashtags pgtypeArray
 		if err := rows.Scan(
-			&p.PostID, &p.AuthorUid, &p.AuthorRegion,
+			&p.PostUid, &p.AuthorUid, &p.AuthorRegion,
 			&p.ContentPreview, &p.Visibility,
 			&hashtags,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
@@ -361,7 +361,7 @@ func truncatePreview(content string, maxLen int) string {
 // Used for the "following" feed pull mode.
 func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs []int64, limit int) ([]GlobalIndexPost, error) {
 	query := `
-		SELECT post_id, author_uid, content_preview,
+		SELECT COALESCE(post_slug, 0) AS post_uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index
@@ -424,7 +424,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 // Used for the "trending" feed.
 func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
 	query := `
-		SELECT post_id, author_uid, content_preview,
+		SELECT COALESCE(post_slug, 0) AS post_uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index

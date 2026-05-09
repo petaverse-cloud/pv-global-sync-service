@@ -145,7 +145,7 @@ func (c *GDPRChecker) logSyncDecision(event *model.CrossRegionSyncEvent, result 
 		"visibility", event.Payload.Visibility,
 		"allowed", result.Allowed,
 		"reason", result.Reason,
-		"post_id", event.Payload.PostID,
+		"post_id", event.Payload.PostUid,
 		"author_id", event.Payload.AuthorUid,
 	)
 }

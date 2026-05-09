@@ -14,7 +14,7 @@ func TestCrossRegionSyncEventJSON(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712736000,
 		Payload: EventPayload{
-			PostID:       42,
+			PostUid:     42,
 			AuthorUid:     7,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
@@ -42,8 +42,8 @@ func TestCrossRegionSyncEventJSON(t *testing.T) {
 	if decoded.EventID != event.EventID {
 		t.Errorf("EventID = %q, want %q", decoded.EventID, event.EventID)
 	}
-	if decoded.Payload.PostID != event.Payload.PostID {
-		t.Errorf("PostID = %d, want %d", decoded.Payload.PostID, event.Payload.PostID)
+	if decoded.Payload.PostUid != event.Payload.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.Payload.PostUid, event.Payload.PostUid)
 	}
 	if decoded.Metadata.DataCategory != DataCategoryUGC {
 		t.Errorf("DataCategory = %q, want %q", decoded.Metadata.DataCategory, DataCategoryUGC)
@@ -148,7 +148,6 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 	syncedAt := time.Date(2024, 4, 10, 12, 1, 0, 0, time.UTC)
 
 	idx := GlobalPostIndex{
-		PostID:         99,
 		AuthorUid:       5,
 		AuthorRegion:   RegionNA,
 		ContentPreview: "Hello world #test @alice",
@@ -177,8 +176,8 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.PostID != idx.PostID {
-		t.Errorf("PostID = %d, want %d", decoded.PostID, idx.PostID)
+	if decoded.PostUid != idx.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.PostUid, idx.PostUid)
 	}
 	if decoded.AuthorUid != idx.AuthorUid {
 		t.Errorf("AuthorUid = %d, want %d", decoded.AuthorUid, idx.AuthorUid)
@@ -252,7 +251,6 @@ func TestGlobalPostIndexJSON(t *testing.T) {
 
 func TestGlobalPostIndexJSONWithEmptySlices(t *testing.T) {
 	idx := GlobalPostIndex{
-		PostID:       1,
 		AuthorUid:     10,
 		AuthorRegion: RegionEU,
 		Visibility:   string(VisibilityPrivate),
@@ -304,8 +302,7 @@ func TestFeedItemJSON(t *testing.T) {
 	expires := time.Date(2024, 5, 8, 10, 0, 0, 0, time.UTC)
 
 	item := FeedItem{
-		UserID:    123,
-		PostID:    456,
+		PostUid:    456,
 		FeedType:  "trending",
 		Score:     0.95,
 		CreatedAt: created,
@@ -322,11 +319,11 @@ func TestFeedItemJSON(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.UserID != item.UserID {
-		t.Errorf("UserID = %d, want %d", decoded.UserID, item.UserID)
+	if decoded.PostUid != item.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.PostUid, item.PostUid)
 	}
-	if decoded.PostID != item.PostID {
-		t.Errorf("PostID = %d, want %d", decoded.PostID, item.PostID)
+	if decoded.PostUid != item.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.PostUid, item.PostUid)
 	}
 	if decoded.FeedType != item.FeedType {
 		t.Errorf("FeedType = %q, want %q", decoded.FeedType, item.FeedType)
@@ -346,8 +343,7 @@ func TestFeedItemJSONWithoutExpiresAt(t *testing.T) {
 	created := time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC)
 
 	item := FeedItem{
-		UserID:    1,
-		PostID:    2,
+		PostUid:    2,
 		FeedType:  "global",
 		Score:     0.5,
 		CreatedAt: created,
@@ -388,7 +384,7 @@ func TestCrossRegionSyncEventWithEmptyMediaURLs(t *testing.T) {
 		TargetRegion: RegionEU,
 		Timestamp:    1712736000,
 		Payload: EventPayload{
-			PostID:       100,
+			PostUid:     100,
 			AuthorUid:     8,
 			AuthorRegion: RegionNA,
 			Visibility:   VisibilityRegional,
@@ -413,8 +409,8 @@ func TestCrossRegionSyncEventWithEmptyMediaURLs(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.Payload.PostID != event.Payload.PostID {
-		t.Errorf("PostID = %d, want %d", decoded.Payload.PostID, event.Payload.PostID)
+	if decoded.Payload.PostUid != event.Payload.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.Payload.PostUid, event.Payload.PostUid)
 	}
 
 	// Verify mediaUrls is omitted when empty
@@ -439,7 +435,7 @@ func TestCrossRegionSyncEventWithMissingOptionalFields(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712800000,
 		Payload: EventPayload{
-			PostID:       200,
+			PostUid:     200,
 			AuthorUid:     9,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityFollowers,
@@ -516,8 +512,8 @@ func TestCrossRegionSyncEventZeroValue(t *testing.T) {
 	if decoded.Timestamp != 0 {
 		t.Errorf("zero Timestamp = %d, want 0", decoded.Timestamp)
 	}
-	if decoded.Payload.PostID != 0 {
-		t.Errorf("zero Payload.PostID = %d, want 0", decoded.Payload.PostID)
+	if decoded.Payload.PostUid != 0 {
+		t.Errorf("zero Payload.PostUid = %d, want 0", decoded.Payload.PostUid)
 	}
 	if decoded.Metadata.GDPRCompliant != false {
 		t.Error("zero Metadata.GDPRCompliant should be false")
@@ -537,8 +533,8 @@ func TestGlobalPostIndexZeroValue(t *testing.T) {
 		t.Fatalf("Zero-value Unmarshal error: %v", err)
 	}
 
-	if decoded.PostID != 0 {
-		t.Errorf("zero PostID = %d, want 0", decoded.PostID)
+	if decoded.PostUid != 0 {
+		t.Errorf("zero PostUid = %d, want 0", decoded.PostUid)
 	}
 	if decoded.AuthorUid != 0 {
 		t.Errorf("zero AuthorUid = %d, want 0", decoded.AuthorUid)
@@ -570,11 +566,11 @@ func TestFeedItemZeroValue(t *testing.T) {
 		t.Fatalf("Zero-value Unmarshal error: %v", err)
 	}
 
-	if decoded.UserID != 0 {
-		t.Errorf("zero UserID = %d, want 0", decoded.UserID)
+	if decoded.PostUid != 0 {
+		t.Errorf("zero PostUid = %d, want 0", decoded.PostUid)
 	}
-	if decoded.PostID != 0 {
-		t.Errorf("zero PostID = %d, want 0", decoded.PostID)
+	if decoded.PostUid != 0 {
+		t.Errorf("zero PostUid = %d, want 0", decoded.PostUid)
 	}
 	if decoded.Score != 0.0 {
 		t.Errorf("zero Score = %f, want 0.0", decoded.Score)
@@ -595,7 +591,7 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 		TargetRegion: RegionNA,
 		Timestamp:    1712900000,
 		Payload: EventPayload{
-			PostID:       500,
+			PostUid:     500,
 			AuthorUid:     50,
 			AuthorRegion: RegionEU,
 			Visibility:   VisibilityGlobal,
@@ -627,14 +623,13 @@ func TestCrossRegionSyncEventWithLargeContent(t *testing.T) {
 		t.Errorf("large content mismatch: got len=%d, want len=%d",
 			len(decoded.Payload.Content), len(event.Payload.Content))
 	}
-	if decoded.Payload.PostID != 500 {
-		t.Errorf("PostID = %d, want 500", decoded.Payload.PostID)
+	if decoded.Payload.PostUid != 500 {
+		t.Errorf("PostUid = %d, want 500", decoded.Payload.PostUid)
 	}
 }
 
 func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 	idx := GlobalPostIndex{
-		PostID:       2,
 		AuthorUid:     20,
 		AuthorRegion: RegionNA,
 		Visibility:   string(VisibilityGlobal),
@@ -668,7 +663,6 @@ func TestGlobalPostIndexJSONWithNilSlices(t *testing.T) {
 
 func TestEventPayloadJSONRoundtrip(t *testing.T) {
 	payload := EventPayload{
-		PostID:       777,
 		AuthorUid:     888,
 		AuthorRegion: RegionNA,
 		Visibility:   VisibilityPrivate,
@@ -686,8 +680,8 @@ func TestEventPayloadJSONRoundtrip(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.PostID != payload.PostID {
-		t.Errorf("PostID = %d, want %d", decoded.PostID, payload.PostID)
+	if decoded.PostUid != payload.PostUid {
+		t.Errorf("PostUid = %d, want %d", decoded.PostUid, payload.PostUid)
 	}
 	if decoded.AuthorUid != payload.AuthorUid {
 		t.Errorf("AuthorUid = %d, want %d", decoded.AuthorUid, payload.AuthorUid)
@@ -751,8 +745,8 @@ func TestTagEventRoundtrip(t *testing.T) {
 		Payload: EventPayload{
 			TagUID:  9000000001,
 			TagName: "test-hashtag",
-			PostID:  0,
-			AuthorID: 0,
+			PostUid:  0,
+			AuthorUid: 0,
 		},
 		Metadata: EventMetadata{
 			GDPRCompliant: true,

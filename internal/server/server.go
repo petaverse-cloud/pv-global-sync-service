@@ -219,7 +219,7 @@ func registerRoutes(r *chi.Mux, db *postgres.Manager, redis *redispkg.Client, sy
 	r.Post("/sync/cross-sync", syncHandler.HandleCrossSync)
 
 	// Global index query (Phase 2)
-	r.Get("/index/posts/{postId}", syncHandler.HandleGetPost)
+	r.Get("/index/posts/{uid}", syncHandler.HandleGetPost)
 	r.Get("/index/posts/uid/{uid}", syncHandler.HandleGetPostByUid)
 
 	// User Index endpoints (Phase 4)

@@ -22,7 +22,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt1",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 1, Visibility: model.VisibilityGlobal},
+				Payload:   model.EventPayload{PostUid: 1, Visibility: model.VisibilityGlobal},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryPII, UserConsent: true},
 			},
 			expect: DeniedPII,
@@ -32,7 +32,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt2",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 2, Visibility: model.VisibilityGlobal},
+				Payload:   model.EventPayload{PostUid: 2, Visibility: model.VisibilityGlobal},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategorySystem},
 			},
 			expect: AllowedSystemData,
@@ -42,7 +42,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt3",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 3, Visibility: model.VisibilityPrivate},
+				Payload:   model.EventPayload{PostUid: 3, Visibility: model.VisibilityPrivate},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryUGC, UserConsent: true},
 			},
 			expect: DeniedPrivate,
@@ -52,7 +52,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt4",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 4, Visibility: model.VisibilityFollowers},
+				Payload:   model.EventPayload{PostUid: 4, Visibility: model.VisibilityFollowers},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryUGC, UserConsent: true},
 			},
 			expect: DeniedFollowers,
@@ -62,7 +62,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt5",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 5, Visibility: model.VisibilityRegional},
+				Payload:   model.EventPayload{PostUid: 5, Visibility: model.VisibilityRegional},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryUGC, UserConsent: true},
 			},
 			expect: DeniedRegional,
@@ -72,7 +72,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt6",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 6, Visibility: model.VisibilityGlobal},
+				Payload:   model.EventPayload{PostUid: 6, Visibility: model.VisibilityGlobal},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryUGC, UserConsent: false},
 			},
 			expect: DeniedNoConsent,
@@ -82,7 +82,7 @@ func TestGDPRChecker_Check(t *testing.T) {
 			event: &model.CrossRegionSyncEvent{
 				EventID:   "evt7",
 				EventType: model.EventTypePostCreated,
-				Payload:   model.EventPayload{PostID: 7, Visibility: model.VisibilityGlobal},
+				Payload:   model.EventPayload{PostUid: 7, Visibility: model.VisibilityGlobal},
 				Metadata:  model.EventMetadata{DataCategory: model.DataCategoryUGC, UserConsent: true},
 			},
 			expect: AllowedGlobal,
@@ -117,7 +117,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_media_ok",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     100,
+					PostUid:     100,
 					Visibility: model.VisibilityGlobal,
 					MediaURLs:  []string{"https://cdn.example.com/img1.jpg"},
 				},
@@ -134,7 +134,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_media_no_urls",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     101,
+					PostUid:     101,
 					Visibility: model.VisibilityGlobal,
 				},
 				Metadata: model.EventMetadata{
@@ -150,7 +150,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_empty_vis",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     102,
+					PostUid:     102,
 					Visibility: "",
 				},
 				Metadata: model.EventMetadata{
@@ -166,7 +166,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_unknown_vis",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     103,
+					PostUid:     103,
 					Visibility: "UNKNOWN",
 				},
 				Metadata: model.EventMetadata{
@@ -182,7 +182,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_sys_private",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     104,
+					PostUid:     104,
 					Visibility: model.VisibilityPrivate,
 				},
 				Metadata: model.EventMetadata{
@@ -197,7 +197,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_pii_global_consent",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostID:     105,
+					PostUid:     105,
 					Visibility: model.VisibilityGlobal,
 				},
 				Metadata: model.EventMetadata{

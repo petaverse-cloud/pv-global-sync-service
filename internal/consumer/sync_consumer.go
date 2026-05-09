@@ -131,7 +131,7 @@ func (c *SyncConsumer) HandleMessage(ctx context.Context, msg *primitive.Message
 	c.log.Info("Sync event processed successfully",
 		logger.String("event_id", event.EventID),
 		logger.String("event_type", string(event.EventType)),
-		logger.Int64("post_id", event.Payload.PostID))
+		logger.Int64("post_uid", event.Payload.PostUid))
 
 	return consumer.ConsumeSuccess, nil
 }
@@ -144,9 +144,9 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 			return err
 		}
 		// Trigger feed generation after successful insert
-		if err := c.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostID); err != nil {
+		if err := c.feedGenerator.HandleNewPost(ctx, event.Payload.AuthorUid, event.Payload.PostUid); err != nil {
 			c.log.Error("Feed generation failed, but post was synced",
-				logger.Int64("post_id", event.Payload.PostID),
+				logger.Int64("post_uid", event.Payload.PostUid),
 				logger.Error(err))
 		}
 		return nil
@@ -171,14 +171,13 @@ func (c *SyncConsumer) routeEvent(ctx context.Context, event *model.CrossRegionS
 // handleStatsUpdated reads actual stats from Regional DB and updates Global Index.
 func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	postUid := event.Payload.PostUid
-	postID := event.Payload.PostID
 
 	var likes, comments, favorites, views int
 	// Note: Regional DB has favorites_count, not shares_count
-	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE post_id = $1`
-	err := c.regionalDB.QueryRow(ctx, query, postID).Scan(&likes, &comments, &favorites, &views)
+	query := `SELECT likes_count, comments_count, favorites_count, views_count FROM posts WHERE uid = $1`
+	err := c.regionalDB.QueryRow(ctx, query, postUid).Scan(&likes, &comments, &favorites, &views)
 	if err != nil {
-		return fmt.Errorf("read stats for post %d from regional db: %w", postID, err)
+		return fmt.Errorf("read stats for post uid=%d from regional db: %w", postUid, err)
 	}
 
 	if err := c.indexSvc.UpdateStats(ctx, postUid, likes, comments, favorites, views); err != nil {
@@ -186,8 +185,7 @@ func (c *SyncConsumer) handleStatsUpdated(ctx context.Context, event *model.Cros
 	}
 
 	c.log.Info("Post stats updated in global index",
-		logger.Int64("post_id", postID),
-		logger.Int64("post_slug", postUid),
+		logger.Int64("post_uid", postUid),
 		logger.Int("likes", likes),
 		logger.Int("comments", comments),
 		logger.Int("favorites", favorites),

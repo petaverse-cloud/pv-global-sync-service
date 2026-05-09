@@ -87,8 +87,8 @@ func ParseEvent(body []byte) (*model.CrossRegionSyncEvent, error) {
 	if event.EventType == "" {
 		return nil, fmt.Errorf("missing eventType in sync event")
 	}
-	if event.Payload.PostID == 0 {
-		return nil, fmt.Errorf("missing postId in sync event payload")
+	if event.Payload.PostUid == 0 {
+		return nil, fmt.Errorf("missing postUid in sync event payload")
 	}
 
 	return &event, nil

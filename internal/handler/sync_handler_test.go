@@ -196,17 +196,17 @@ func TestSyncHandler_HandleCrossSync_MissingBothFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// HandleGetPost – missing / invalid postId (returns 400 before indexSvc)
+// HandleGetPost – missing / invalid uid (returns 400 before indexSvc)
 // ---------------------------------------------------------------------------
 
-func TestSyncHandler_HandleGetPost_MissingPostID(t *testing.T) {
+func TestSyncHandler_HandleGetPost_MissingUid(t *testing.T) {
 	log, _ := logger.New("warn", "console")
 	h := &SyncHandler{log: log}
 
 	req := httptest.NewRequest(http.MethodGet, "/index/posts/", nil)
 	// chi router would normally populate the URL param; simulate empty param
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"postId"}, Values: []string{""}},
+		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{""}},
 	}))
 	rec := httptest.NewRecorder()
 
@@ -217,13 +217,13 @@ func TestSyncHandler_HandleGetPost_MissingPostID(t *testing.T) {
 	}
 }
 
-func TestSyncHandler_HandleGetPost_InvalidPostID_NonNumeric(t *testing.T) {
+func TestSyncHandler_HandleGetPost_InvalidUid_NonNumeric(t *testing.T) {
 	log, _ := logger.New("warn", "console")
 	h := &SyncHandler{log: log}
 
 	req := httptest.NewRequest(http.MethodGet, "/index/posts/abc", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"postId"}, Values: []string{"abc"}},
+		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"abc"}},
 	}))
 	rec := httptest.NewRecorder()
 
@@ -234,13 +234,13 @@ func TestSyncHandler_HandleGetPost_InvalidPostID_NonNumeric(t *testing.T) {
 	}
 }
 
-func TestSyncHandler_HandleGetPost_InvalidPostID_Negative(t *testing.T) {
+func TestSyncHandler_HandleGetPost_InvalidUid_Negative(t *testing.T) {
 	log, _ := logger.New("warn", "console")
 	h := &SyncHandler{log: log}
 
 	req := httptest.NewRequest(http.MethodGet, "/index/posts/-5", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"postId"}, Values: []string{"-5"}},
+		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"-5"}},
 	}))
 	rec := httptest.NewRecorder()
 
@@ -251,13 +251,13 @@ func TestSyncHandler_HandleGetPost_InvalidPostID_Negative(t *testing.T) {
 	}
 }
 
-func TestSyncHandler_HandleGetPost_InvalidPostID_MixedChars(t *testing.T) {
+func TestSyncHandler_HandleGetPost_InvalidUid_MixedChars(t *testing.T) {
 	log, _ := logger.New("warn", "console")
 	h := &SyncHandler{log: log}
 
 	req := httptest.NewRequest(http.MethodGet, "/index/posts/12a34", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"postId"}, Values: []string{"12a34"}},
+		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"12a34"}},
 	}))
 	rec := httptest.NewRecorder()
 
