@@ -62,18 +62,17 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 
 	query := `
 		INSERT INTO global_post_index (
-			post_id, post_slug, author_uid, author_region, content_preview, visibility,
+			post_slug, author_uid, author_region, content_preview, visibility,
 			hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
 			gdpr_compliant, user_consent, data_category, created_at, synced_at,
 			author_nickname, author_avatar_url
 		) VALUES (
-			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, 0, 0, 0, 0,
-			$10, $11, $12, $13, $14,
-			$15, $16
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, 0, 0, 0, 0,
+			$9, $10, $11, $12, $13,
+			$14, $15
 		)
 		ON CONFLICT (post_slug) DO UPDATE SET
-			post_id = EXCLUDED.post_id,
 			author_uid = EXCLUDED.author_uid,
 			author_region = EXCLUDED.author_region,
 			content_preview = EXCLUDED.content_preview,
@@ -95,7 +94,6 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 
 	_, err := s.db.Exec(ctx, query,
 		event.Payload.PostUid,
-		event.Payload.PostUid,
 		event.Payload.AuthorUid,
 		event.Payload.AuthorRegion,
 		truncatePreview(event.Payload.Content, 500),
@@ -106,6 +104,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		event.Metadata.GDPRCompliant,
 		event.Metadata.UserConsent,
 		event.Metadata.DataCategory,
+		now,
 		now,
 		authorNickname,
 		authorAvatarURL,
