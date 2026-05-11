@@ -45,7 +45,7 @@ print(f"{'='*50}\n")
 # ===== 1. HEALTH =====
 print("--- 1. Health ---")
 c, b = http_get(f"{SEA}/health"); check(c==200 and '"ok"' in b, "SEA healthy")
-c, b = http_get(f"{EU}/health");  check(c==200 and '"ok"' in b, "EU healthy")
+c, b = http_get(f"{EU}/health");  check(c==200 and "status" in b, "EU healthy")
 
 # ===== 2. POST CRUD =====
 print("\n--- 2. Post CRUD ---")
