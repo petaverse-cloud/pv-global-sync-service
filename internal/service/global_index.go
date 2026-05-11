@@ -392,7 +392,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostUid, &p.AuthorUid, &p.ContentPreview,
+		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -406,7 +406,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 // Used for the "global" feed.
 func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error) {
 	query := `
-		SELECT post_id, COALESCE(post_slug, 0), author_uid, content_preview,
+		SELECT COALESCE(post_slug, 0), author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index
@@ -423,7 +423,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostUid, &p.AuthorUid, &p.ContentPreview,
+		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
