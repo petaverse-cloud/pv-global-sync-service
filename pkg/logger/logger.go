@@ -74,3 +74,8 @@ func Bool(key string, value bool) Field {
 func Any(key string, value interface{}) Field {
 	return zap.Any(key, value)
 }
+
+// NewNop creates a no-op logger for testing
+func NewNop() *Logger {
+	return &Logger{SugaredLogger: zap.NewNop().Sugar()}
+}

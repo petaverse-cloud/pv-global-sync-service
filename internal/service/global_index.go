@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
@@ -30,14 +31,27 @@ type GlobalIndexPost struct {
 	AuthorAvatarURL *string
 }
 
+// DBTx defines the database operations needed by GlobalIndexService.
+// *pgxpool.Pool satisfies this interface automatically.
+type DBTx interface {
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+}
+
 // GlobalIndexService manages operations on the global_post_index table.
 type GlobalIndexService struct {
-	db  *pgxpool.Pool
+	db  DBTx
 	log *logger.Logger
 }
 
 // NewGlobalIndexService creates a new service instance.
 func NewGlobalIndexService(db *pgxpool.Pool, log *logger.Logger) *GlobalIndexService {
+	return &GlobalIndexService{db: db, log: log}
+}
+
+// NewGlobalIndexServiceWithDB creates a service with a custom DBTx (useful for testing).
+func NewGlobalIndexServiceWithDB(db DBTx, log *logger.Logger) *GlobalIndexService {
 	return &GlobalIndexService{db: db, log: log}
 }
 
