@@ -162,8 +162,43 @@ time.sleep(1)
 c, b = http_get(f"{SEA}/index/tags/{tag_uid}")
 check(c == 404, "Deleted tag returns 404", f"HTTP {c}")
 
-# ===== 6. IDEMPOTENCY =====
-print("\n--- 6. Idempotency ---")
+# ===== 6. FEED ENDPOINTS =====
+print("\n--- 6. Feed ---")
+feed_uid = post_uid + 200
+c, b = http_post(f"{SEA}/sync/content", {
+    "eventId": f"{eid}_feed", "eventType": "POST_CREATED",
+    "sourceRegion": "SEA", "targetRegion": "EU", "timestamp": ts,
+    "payload": {"postUid": feed_uid, "authorUid": author_uid, "authorRegion": "SEA",
+                "visibility": "GLOBAL", "content": "Feed test post #e2e"},
+    "metadata": {"gdprCompliant": True, "userConsent": True, "dataCategory": "TIER_2", "crossBorderOk": True}
+})
+check(c == 202, "Feed: create post", f"HTTP {c}")
+time.sleep(1)
+
+# Test global feed
+c, b = http_get(f"{SEA}/feed/1?feedType=global&limit=5")
+check(c == 200, "Feed global: HTTP 200", f"HTTP {c}")
+check('"items"' in b, "Feed global: has items")
+check('"hasMore"' in b, "Feed global: has metadata")
+
+# Test trending feed
+c, b = http_get(f"{SEA}/feed/1?feedType=trending&limit=5")
+check(c == 200, "Feed trending: HTTP 200", f"HTTP {c}")
+
+# Test following feed (may be empty if user has no follows)
+c, b = http_get(f"{SEA}/feed/1?feedType=following&limit=5")
+check(c == 200, "Feed following: HTTP 200", f"HTTP {c}")
+
+# Cleanup
+http_post(f"{SEA}/sync/content", {
+    "eventId": f"{eid}_feed_cleanup", "eventType": "POST_DELETED",
+    "sourceRegion": "SEA", "targetRegion": "EU", "timestamp": ts,
+    "payload": {"postUid": feed_uid},
+    "metadata": {"gdprCompliant": True, "userConsent": True, "dataCategory": "TIER_2", "crossBorderOk": True}
+})
+
+# ===== 7. IDEMPOTENCY =====
+print("\n--- 7. Idempotency ---")
 idem_uid = post_uid + 100
 idem_event = {
     "eventId": f"{eid}_idem", "eventType": "POST_CREATED",
