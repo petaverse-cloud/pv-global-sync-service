@@ -19,15 +19,58 @@ import (
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
+// GDPRCheckerIF defines the GDPR check interface for testability.
+type GDPRCheckerIF interface {
+	Check(event *model.CrossRegionSyncEvent) service.CheckResult
+}
+
+// AuditLoggerIF defines the audit log interface for testability.
+type AuditLoggerIF interface {
+	Log(ctx context.Context, event *model.CrossRegionSyncEvent, allowed bool, reason string) error
+}
+
+// FeedGenIF defines the feed generator interface for testability.
+type FeedGenIF interface {
+	HandleNewPost(ctx context.Context, authorUid int64, postUid int64) error
+	HandleDeletedPost(ctx context.Context, postUid int64) error
+}
+
+// EventLogIF defines the event log interface for testability.
+type EventLogIF interface {
+	IsProcessed(ctx context.Context, eventID string) (bool, error)
+	MarkProcessed(ctx context.Context, event *model.CrossRegionSyncEvent, errMsg string) error
+}
+
+// IndexSvcIF defines the global index service interface for testability.
+type IndexSvcIF interface {
+	InsertPost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	UpdatePost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	DeletePost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	UpdateStats(ctx context.Context, postUid int64, likes, comments, shares, views int) error
+	GetPost(ctx context.Context, postUid int64) (*model.GlobalPostIndex, error)
+	GetPostByUid(ctx context.Context, postUid int64) (*model.GlobalPostIndex, error)
+}
+
+// TagIndexSvcIF defines the tag index service interface for testability.
+type TagIndexSvcIF interface {
+	UpsertTag(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	DeleteTag(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	UpdateStats(ctx context.Context, tagUID int64, postCount int64) error
+	SearchTags(ctx context.Context, keyword string, limit int) ([]model.GlobalTagIndex, error)
+	GetPopularTags(ctx context.Context, limit int) ([]model.GlobalTagIndex, error)
+	GetTagByUID(ctx context.Context, tagUID int64) (*model.GlobalTagIndex, error)
+	GetRegionsForTag(ctx context.Context, tagUID int64) ([]string, error)
+}
+
 // SyncHandler handles HTTP sync endpoints.
 type SyncHandler struct {
 	consumer      *consumer.SyncConsumer
-	eventLog      *service.SyncEventLogService
-	gdprChecker   *service.GDPRChecker
-	indexSvc      *service.GlobalIndexService
-	tagIndexSvc   *service.GlobalTagIndexService
-	auditSvc      *service.AuditLogService
-	feedGenerator *service.FeedGenerator
+	eventLog      EventLogIF
+	gdprChecker   GDPRCheckerIF
+	indexSvc      IndexSvcIF
+	tagIndexSvc   TagIndexSvcIF
+	auditSvc      AuditLoggerIF
+	feedGenerator FeedGenIF
 	regionalDB    *pgxpool.Pool
 	crossSync     *sync.CrossSyncService
 	log           *logger.Logger
