@@ -61,6 +61,16 @@ var (
 
 // Check evaluates whether a sync event complies with GDPR rules.
 func (c *GDPRChecker) Check(event *model.CrossRegionSyncEvent) CheckResult {
+	// Rule 0: DELETE and TAG operations only carry identifiers, not content — always allow.
+	if event.EventType == model.EventTypePostDeleted ||
+		event.EventType == model.EventTypeTagCreated ||
+		event.EventType == model.EventTypeTagUpdated ||
+		event.EventType == model.EventTypeTagDeleted ||
+		event.EventType == model.EventTypeTagStatsUpdated {
+		c.logSyncDecision(event, AllowedSystemData)
+		return AllowedSystemData
+	}
+
 	// Rule 1: PII data is never synced
 	if event.Metadata.DataCategory == model.DataCategoryPII {
 		c.logSyncDecision(event, DeniedPII)
