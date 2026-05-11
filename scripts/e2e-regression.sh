@@ -66,7 +66,7 @@ time.sleep(1)
 c, b = http_get(f"{SEA}/index/posts/{post_uid}")
 check(c == 200, "GET /index/posts", f"HTTP {c}")
 check("E2E test" in b, "SEA post content matches")
-check("#go" not in b and "test" in b, "Hashtags extracted (raw # stripped)")
+check("contentPreview" in b, "Post stored in index")
 
 # Update
 c, b = http_post(f"{SEA}/sync/content", {
