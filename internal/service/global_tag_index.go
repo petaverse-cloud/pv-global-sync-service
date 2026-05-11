@@ -15,12 +15,17 @@ import (
 
 // GlobalTagIndexService manages operations on the global_tag_index table.
 type GlobalTagIndexService struct {
-	db  *pgxpool.Pool
+	db  DBTx
 	log *logger.Logger
 }
 
 // NewGlobalTagIndexService creates a new service instance.
 func NewGlobalTagIndexService(db *pgxpool.Pool, log *logger.Logger) *GlobalTagIndexService {
+	return &GlobalTagIndexService{db: db, log: log}
+}
+
+// NewGlobalTagIndexServiceWithDB creates a service for testing with mock DB.
+func NewGlobalTagIndexServiceWithDB(db DBTx, log *logger.Logger) *GlobalTagIndexService {
 	return &GlobalTagIndexService{db: db, log: log}
 }
 
