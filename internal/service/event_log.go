@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/postgres"
@@ -14,13 +17,30 @@ import (
 
 // SyncEventLogService tracks processed events for idempotency.
 type SyncEventLogService struct {
-	db    *postgres.Manager
-	redis *redispkg.Client
+	db    EventLogDB
+	redis EventLogRedis
 	log   *logger.Logger
+}
+
+// EventLogDB defines DB operations needed by SyncEventLogService.
+type EventLogDB interface {
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+}
+
+// EventLogRedis defines Redis operations needed by SyncEventLogService.
+type EventLogRedis interface {
+	IsEventProcessed(ctx context.Context, eventID string) (bool, error)
+	MarkEventProcessed(ctx context.Context, eventID string) error
 }
 
 // NewSyncEventLogService creates a new event log service.
 func NewSyncEventLogService(db *postgres.Manager, redis *redispkg.Client, log *logger.Logger) *SyncEventLogService {
+	return &SyncEventLogService{db: db.GlobalIndex(), redis: redis, log: log}
+}
+
+// NewSyncEventLogServiceForTest creates a service for testing with mock deps.
+func NewSyncEventLogServiceForTest(db EventLogDB, redis EventLogRedis, log *logger.Logger) *SyncEventLogService {
 	return &SyncEventLogService{db: db, redis: redis, log: log}
 }
 
@@ -35,7 +55,7 @@ func (s *SyncEventLogService) IsProcessed(ctx context.Context, eventID string) (
 	// Slow path: DB check
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM sync_event_log WHERE event_id = $1 AND status = 'processed')`
-	if err := s.db.GlobalIndex().QueryRow(ctx, query, eventID).Scan(&exists); err != nil {
+	if err := s.db.QueryRow(ctx, query, eventID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check event log: %w", err)
 	}
 
@@ -60,7 +80,7 @@ func (s *SyncEventLogService) MarkProcessed(ctx context.Context, event *model.Cr
 		ON CONFLICT (event_id) DO UPDATE SET status = EXCLUDED.status, error_message = EXCLUDED.error_message
 	`
 
-	_, err := s.db.GlobalIndex().Exec(ctx, query,
+	_, err := s.db.Exec(ctx, query,
 		event.EventID, event.EventType, event.SourceRegion, status, errMsg,
 	)
 	if err != nil {

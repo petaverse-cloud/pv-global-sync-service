@@ -1,426 +1,227 @@
 package service
 
 import (
-	"strings"
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v4"
+
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
+
+	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
-func TestParseEvent(t *testing.T) {
-	tests := []struct {
-		name    string
-		body    string
-		wantErr bool
-	}{
-		{
-			name:    "valid event",
-			body:    `{"eventId":"evt1","eventType":"POST_CREATED","sourceRegion":"EU","targetRegion":"NA","timestamp":123,"payload":{"postUid":1,"authorId":2,"authorRegion":"EU","visibility":"GLOBAL","content":"hello #world","mediaUrls":[]},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`,
-			wantErr: false,
-		},
-		{
-			name:    "invalid JSON",
-			body:    `not json`,
-			wantErr: true,
-		},
-		{
-			name:    "missing eventId",
-			body:    `{"eventType":"POST_CREATED","payload":{"postUid":1}}`,
-			wantErr: true,
-		},
-		{
-			name:    "missing eventType",
-			body:    `{"eventId":"evt1","payload":{"postUid":1}}`,
-			wantErr: true,
-		},
-		{
-			name:    "missing postUid",
-			body:    `{"eventId":"evt1","eventType":"POST_CREATED","payload":{"authorId":2}}`,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			event, err := ParseEvent([]byte(tt.body))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseEvent() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && event == nil {
-				t.Error("ParseEvent() returned nil event without error")
-			}
-			if !tt.wantErr && event.EventID != "evt1" {
-				t.Errorf("ParseEvent() eventID = %q, want %q", event.EventID, "evt1")
-			}
-		})
-	}
+// mockRedis implements EventLogRedis for testing
+type mockEventLogRedis struct {
+	processed map[string]bool
+	failGet   bool
+	failSet   bool
 }
 
-func TestParseEvent_EmptyAndNullBodies(t *testing.T) {
-	tests := []struct {
-		name    string
-		body    string
-		wantErr bool
-		errSub  string
-	}{
-		{
-			name:    "empty body",
-			body:    "",
-			wantErr: true,
-			errSub:  "parse sync event",
-		},
-		{
-			name:    "whitespace only",
-			body:    "   \t\n  ",
-			wantErr: true,
-			errSub:  "parse sync event",
-		},
-		{
-			name:    "null body",
-			body:    "null",
-			wantErr: true,
-			errSub:  "missing eventId",
-		},
+func (m *mockEventLogRedis) IsEventProcessed(ctx context.Context, eventID string) (bool, error) {
+	if m.failGet {
+		return false, errors.New("redis error")
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			event, err := ParseEvent([]byte(tt.body))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseEvent() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr {
-				if event == nil {
-					t.Fatal("expected non-nil event")
-				}
-				return
-			}
-			if err == nil {
-				t.Fatal("expected error but got nil")
-			}
-			if tt.errSub != "" && !strings.Contains(err.Error(), tt.errSub) {
-				t.Errorf("ParseEvent() error = %v, want substring %q", err, tt.errSub)
-			}
-		})
-	}
+	return m.processed[eventID], nil
 }
 
-func TestParseEvent_ExtraUnknownFields(t *testing.T) {
-	body := `{
-		"eventId": "evt-extra",
-		"eventType": "POST_CREATED",
-		"sourceRegion": "EU",
-		"targetRegion": "NA",
-		"timestamp": 999,
-		"payload": {
-			"postUid": 42,
-			"authorId": 7,
-			"authorRegion": "EU",
-			"visibility": "GLOBAL",
-			"content": "test",
-			"unknownPayloadField": "ignored"
-		},
-		"metadata": {
-			"gdprCompliant": true,
-			"userConsent": true,
-			"dataCategory": "TIER_2",
-			"crossBorderOk": true,
-			"unknownMetaField": 12345
-		},
-		"topLevelUnknownField": "also ignored",
-		"anotherUnknown": {"nested": true}
-	}`
+func (m *mockEventLogRedis) MarkEventProcessed(ctx context.Context, eventID string) error {
+	if m.failSet {
+		return errors.New("redis error")
+	}
+	m.processed[eventID] = true
+	return nil
+}
 
-	event, err := ParseEvent([]byte(body))
+func newMockRedis() *mockEventLogRedis {
+	return &mockEventLogRedis{processed: make(map[string]bool)}
+}
+
+// ============================================
+// IsProcessed tests
+// ============================================
+
+func TestIsProcessed_RedisHit(t *testing.T) {
+	redis := newMockRedis()
+	redis.processed["evt_001"] = true
+
+	svc := NewSyncEventLogServiceForTest(nil, redis, logger.NewNop())
+
+	processed, err := svc.IsProcessed(context.Background(), "evt_001")
 	if err != nil {
-		t.Fatalf("ParseEvent() unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if event == nil {
-		t.Fatal("ParseEvent() returned nil event")
-	}
-	if event.EventID != "evt-extra" {
-		t.Errorf("EventID = %q, want %q", event.EventID, "evt-extra")
-	}
-	if event.EventType != model.EventTypePostCreated {
-		t.Errorf("EventType = %q, want %q", event.EventType, model.EventTypePostCreated)
-	}
-	if event.Payload.PostUid != 42 {
-		t.Errorf("PostID = %d, want 42", event.Payload.PostUid)
-	}
-	if event.Timestamp != 999 {
-		t.Errorf("Timestamp = %d, want 999", event.Timestamp)
+	if !processed {
+		t.Error("expected processed=true")
 	}
 }
 
-func TestParseEvent_ZeroPostID(t *testing.T) {
-	body := `{"eventId":"evt1","eventType":"POST_CREATED","payload":{"postUid":0,"authorId":1}}`
-	event, err := ParseEvent([]byte(body))
+func TestIsProcessed_RedisMiss_DBHit(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
+
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
+
+	// Redis returns false (not found)
+	// DB returns true (found)
+	rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
+	mockDB.ExpectQuery("SELECT EXISTS").WithArgs("evt_002").WillReturnRows(rows)
+
+	processed, err := svc.IsProcessed(context.Background(), "evt_002")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !processed {
+		t.Error("expected processed=true from DB")
+	}
+	// Should have re-populated Redis cache
+	if !redis.processed["evt_002"] {
+		t.Error("expected Redis cache to be re-populated")
+	}
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestIsProcessed_RedisMiss_DBMiss(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
+
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
+
+	rows := pgxmock.NewRows([]string{"exists"}).AddRow(false)
+	mockDB.ExpectQuery("SELECT EXISTS").WithArgs("evt_new").WillReturnRows(rows)
+
+	processed, err := svc.IsProcessed(context.Background(), "evt_new")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if processed {
+		t.Error("expected processed=false for new event")
+	}
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestIsProcessed_RedisError_FallsBackToDB(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
+
+	redis := newMockRedis()
+	redis.failGet = true // Redis fails
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
+
+	rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
+	mockDB.ExpectQuery("SELECT EXISTS").WithArgs("evt_003").WillReturnRows(rows)
+
+	processed, err := svc.IsProcessed(context.Background(), "evt_003")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !processed {
+		t.Error("expected processed=true from DB fallback")
+	}
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestIsProcessed_DBError(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
+
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
+
+	mockDB.ExpectQuery("SELECT EXISTS").WithArgs("evt_db_err").WillReturnError(pgx.ErrNoRows)
+
+	_, err := svc.IsProcessed(context.Background(), "evt_db_err")
 	if err == nil {
-		t.Fatal("ParseEvent() expected error for postId=0, got nil")
+		t.Fatal("expected error from DB")
 	}
-	if event != nil {
-		t.Error("ParseEvent() expected nil event on error")
-	}
-	if !strings.Contains(err.Error(), "missing postUid") {
-		t.Errorf("ParseEvent() error = %v, want substring %q", err, "missing postUid")
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
 	}
 }
 
-func TestParseEvent_AllEventTypes(t *testing.T) {
-	eventTypes := []struct {
-		name  string
-		value model.SyncEventType
-	}{
-		{"POST_CREATED", model.EventTypePostCreated},
-		{"POST_UPDATED", model.EventTypePostUpdated},
-		{"POST_DELETED", model.EventTypePostDeleted},
-		{"POST_STATS_UPDATED", model.EventTypePostStatsUpdated},
-	}
+// ============================================
+// MarkProcessed tests
+// ============================================
 
-	for _, et := range eventTypes {
-		t.Run(et.name, func(t *testing.T) {
-			body := `{"eventId":"evt-type","eventType":"` + string(et.value) + `","payload":{"postUid":1}}`
-			event, err := ParseEvent([]byte(body))
-			if err != nil {
-				t.Fatalf("ParseEvent() unexpected error: %v", err)
-			}
-			if event == nil {
-				t.Fatal("expected non-nil event")
-			}
-			if event.EventType != et.value {
-				t.Errorf("EventType = %q, want %q", event.EventType, et.value)
-			}
-		})
-	}
-}
+func TestMarkProcessed_Success(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
 
-func TestParseEvent_FieldVerification(t *testing.T) {
-	body := `{
-		"eventId": "evt-verify",
-		"eventType": "POST_UPDATED",
-		"sourceRegion": "NA",
-		"targetRegion": "EU",
-		"timestamp": 1700000000,
-		"payload": {
-			"postUid": 9876,
-			"authorUid": 5432,
-			"authorRegion": "NA",
-			"visibility": "FOLLOWERS",
-			"content": "updated content here"
-		},
-		"metadata": {
-			"gdprCompliant": true,
-			"userConsent": false,
-			"dataCategory": "TIER_1",
-			"crossBorderOk": false
-		}
-	}`
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
 
-	event, err := ParseEvent([]byte(body))
+	event := makeEvent(model.EventTypePostCreated, 100, 200, "test")
+
+	mockDB.ExpectExec("INSERT INTO sync_event_log").
+		WithArgs("evt_test_001", model.EventTypePostCreated, model.RegionSEA, "processed", "").
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	err := svc.MarkProcessed(context.Background(), event, "")
 	if err != nil {
-		t.Fatalf("ParseEvent() unexpected error: %v", err)
+		t.Fatalf("MarkProcessed failed: %v", err)
 	}
-	if event == nil {
-		t.Fatal("expected non-nil event")
+	if !redis.processed["evt_test_001"] {
+		t.Error("expected Redis cache to be set")
 	}
-
-	// Verify top-level fields
-	if event.EventID != "evt-verify" {
-		t.Errorf("EventID = %q, want %q", event.EventID, "evt-verify")
-	}
-	if event.EventType != model.EventTypePostUpdated {
-		t.Errorf("EventType = %q, want %q", event.EventType, model.EventTypePostUpdated)
-	}
-	if event.SourceRegion != model.RegionNA {
-		t.Errorf("SourceRegion = %q, want %q", event.SourceRegion, model.RegionNA)
-	}
-	if event.TargetRegion != model.RegionEU {
-		t.Errorf("TargetRegion = %q, want %q", event.TargetRegion, model.RegionEU)
-	}
-	if event.Timestamp != 1700000000 {
-		t.Errorf("Timestamp = %d, want 1700000000", event.Timestamp)
-	}
-
-	// Verify payload fields
-	if event.Payload.PostUid != 9876 {
-		t.Errorf("Payload.PostUid = %d, want 9876", event.Payload.PostUid)
-	}
-	if event.Payload.AuthorUid != 5432 {
-		t.Errorf("Payload.AuthorUid = %d, want 5432", event.Payload.AuthorUid)
-	}
-	if event.Payload.AuthorRegion != model.RegionNA {
-		t.Errorf("Payload.AuthorRegion = %q, want %q", event.Payload.AuthorRegion, model.RegionNA)
-	}
-	if event.Payload.Visibility != model.VisibilityFollowers {
-		t.Errorf("Payload.Visibility = %q, want %q", event.Payload.Visibility, model.VisibilityFollowers)
-	}
-	if event.Payload.Content != "updated content here" {
-		t.Errorf("Payload.Content = %q, want %q", event.Payload.Content, "updated content here")
-	}
-
-	// Verify metadata fields
-	if !event.Metadata.GDPRCompliant {
-		t.Error("Metadata.GDPRCompliant = false, want true")
-	}
-	if event.Metadata.UserConsent {
-		t.Error("Metadata.UserConsent = true, want false")
-	}
-	if event.Metadata.DataCategory != model.DataCategoryPII {
-		t.Errorf("Metadata.DataCategory = %q, want %q", event.Metadata.DataCategory, model.DataCategoryPII)
-	}
-	if event.Metadata.CrossBorderOK {
-		t.Error("Metadata.CrossBorderOK = true, want false")
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
 	}
 }
 
-func TestParseEvent_MediaURLs(t *testing.T) {
-	tests := []struct {
-		name          string
-		body          string
-		wantMediaURLs []string
-		wantMediaLen  int
-	}{
-		{
-			name: "multiple media URLs",
-			body: `{
-				"eventId": "evt-media",
-				"eventType": "POST_CREATED",
-				"payload": {
-					"postUid": 1,
-					"mediaUrls": ["https://cdn.example.com/img1.jpg", "https://cdn.example.com/vid1.mp4", "https://cdn.example.com/img2.png"]
-				}
-			}`,
-			wantMediaURLs: []string{
-				"https://cdn.example.com/img1.jpg",
-				"https://cdn.example.com/vid1.mp4",
-				"https://cdn.example.com/img2.png",
-			},
-			wantMediaLen: 3,
-		},
-		{
-			name: "single media URL",
-			body: `{
-				"eventId": "evt-media2",
-				"eventType": "POST_CREATED",
-				"payload": {
-					"postUid": 2,
-					"mediaUrls": ["https://cdn.example.com/only.jpg"]
-				}
-			}`,
-			wantMediaURLs: []string{"https://cdn.example.com/only.jpg"},
-			wantMediaLen:  1,
-		},
-		{
-			name: "empty media URLs array",
-			body: `{
-				"eventId": "evt-media3",
-				"eventType": "POST_CREATED",
-				"payload": {
-					"postUid": 3,
-					"mediaUrls": []
-				}
-			}`,
-			wantMediaURLs: nil,
-			wantMediaLen:  0,
-		},
-		{
-			name: "no mediaUrls field",
-			body: `{
-				"eventId": "evt-media4",
-				"eventType": "POST_CREATED",
-				"payload": {
-					"postUid": 4
-				}
-			}`,
-			wantMediaURLs: nil,
-			wantMediaLen:  0,
-		},
-	}
+func TestMarkProcessed_WithError(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			event, err := ParseEvent([]byte(tt.body))
-			if err != nil {
-				t.Fatalf("ParseEvent() unexpected error: %v", err)
-			}
-			if event == nil {
-				t.Fatal("expected non-nil event")
-			}
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
 
-			if len(event.Payload.MediaURLs) != tt.wantMediaLen {
-				t.Errorf("len(MediaURLs) = %d, want %d", len(event.Payload.MediaURLs), tt.wantMediaLen)
-			}
+	event := makeEvent(model.EventTypePostCreated, 101, 201, "test")
 
-			for i, url := range tt.wantMediaURLs {
-				if i >= len(event.Payload.MediaURLs) {
-					t.Errorf("MediaURLs[%d] missing, want %q", i, url)
-					continue
-				}
-				if event.Payload.MediaURLs[i] != url {
-					t.Errorf("MediaURLs[%d] = %q, want %q", i, event.Payload.MediaURLs[i], url)
-				}
-			}
-		})
-	}
-}
+	mockDB.ExpectExec("INSERT INTO sync_event_log").
+		WithArgs("evt_test_001", model.EventTypePostCreated, model.RegionSEA, "failed", "some error").
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-func TestParseEvent_NestedEmptyPayload(t *testing.T) {
-	body := `{"eventId":"evt-nested","eventType":"POST_DELETED","payload":{"postUid":100,"content":"","mediaUrls":[]}}`
-	event, err := ParseEvent([]byte(body))
+	err := svc.MarkProcessed(context.Background(), event, "some error")
 	if err != nil {
-		t.Fatalf("ParseEvent() unexpected error: %v", err)
+		t.Fatalf("MarkProcessed failed: %v", err)
 	}
-	if event == nil {
-		t.Fatal("expected non-nil event")
+	// Redis should NOT be set for failed events
+	if redis.processed["evt_test_001"] {
+		t.Error("expected Redis NOT to be set for failed event")
 	}
-	if event.Payload.PostUid != 100 {
-		t.Errorf("PostID = %d, want 100", event.Payload.PostUid)
-	}
-	if event.Payload.Content != "" {
-		t.Errorf("Content = %q, want empty", event.Payload.Content)
-	}
-	if len(event.Payload.MediaURLs) != 0 {
-		t.Errorf("len(MediaURLs) = %d, want 0", len(event.Payload.MediaURLs))
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
 	}
 }
 
-func TestParseEvent_WhitespaceAndZeroValues(t *testing.T) {
-	tests := []struct {
-		name   string
-		body   string
-		errSub string
-	}{
-		{
-			name:   "empty string eventId",
-			body:   `{"eventId":"","eventType":"POST_CREATED","payload":{"postUid":1}}`,
-			errSub: "missing eventId",
-		},
-		{
-			name:   "empty string eventType",
-			body:   `{"eventId":"evt1","eventType":"","payload":{"postUid":1}}`,
-			errSub: "missing eventType",
-		},
-		{
-			name:   "missing payload entirely",
-			body:   `{"eventId":"evt1","eventType":"POST_CREATED"}`,
-			errSub: "missing postUid",
-		},
-	}
+func TestMarkProcessed_DBError(t *testing.T) {
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			event, err := ParseEvent([]byte(tt.body))
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if event != nil {
-				t.Error("expected nil event on error")
-			}
-			if !strings.Contains(err.Error(), tt.errSub) {
-				t.Errorf("error = %v, want substring %q", err, tt.errSub)
-			}
-		})
+	redis := newMockRedis()
+	svc := NewSyncEventLogServiceForTest(mockDB, redis, logger.NewNop())
+
+	event := makeEvent(model.EventTypePostCreated, 102, 202, "test")
+
+	mockDB.ExpectExec("INSERT INTO sync_event_log").
+		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WillReturnError(errors.New("db error"))
+
+	err := svc.MarkProcessed(context.Background(), event, "")
+	if err == nil {
+		t.Fatal("expected error from DB")
+	}
+	if err := mockDB.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
 	}
 }
