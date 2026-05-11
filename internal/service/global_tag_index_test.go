@@ -30,7 +30,8 @@ func makeTagEvent(tagUID int64, tagName string, eventType model.SyncEventType) *
 // ===== UpsertTag =====
 
 func TestTagUpsert_Insert(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	mock.ExpectExec("INSERT INTO global_tag_index").
@@ -46,7 +47,8 @@ func TestTagUpsert_Insert(t *testing.T) {
 }
 
 func TestTagUpsert_Update(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	// ON CONFLICT DO UPDATE — same SQL, upsert behavior
@@ -63,7 +65,8 @@ func TestTagUpsert_Update(t *testing.T) {
 }
 
 func TestTagUpsert_DBError(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	mock.ExpectExec("INSERT INTO global_tag_index").
@@ -78,7 +81,8 @@ func TestTagUpsert_DBError(t *testing.T) {
 // ===== DeleteTag =====
 
 func TestTagDelete_Success(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	mock.ExpectExec("DELETE FROM global_tag_index").
@@ -94,7 +98,8 @@ func TestTagDelete_Success(t *testing.T) {
 }
 
 func TestTagDelete_NotFound(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	mock.ExpectExec("DELETE FROM global_tag_index").
@@ -110,7 +115,8 @@ func TestTagDelete_NotFound(t *testing.T) {
 // ===== UpdateStats =====
 
 func TestTagUpdateStats_WithPosts(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	// postCount > 0 → last_active_at set to now
@@ -127,7 +133,8 @@ func TestTagUpdateStats_WithPosts(t *testing.T) {
 }
 
 func TestTagUpdateStats_ZeroPosts(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	// postCount == 0 → last_active_at = nil
@@ -146,7 +153,8 @@ func TestTagUpdateStats_ZeroPosts(t *testing.T) {
 // ===== SearchTags =====
 
 func TestTagSearch_Found(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 	now := time.Now().UTC()
 
@@ -162,29 +170,45 @@ func TestTagSearch_Found(t *testing.T) {
 		WillReturnRows(rows)
 
 	tags, err := svc.SearchTags(context.Background(), "go", 20)
-	if err != nil { t.Fatal(err) }
-	if len(tags) != 2 { t.Fatalf("len=%d want 2", len(tags)) }
-	if tags[0].Name != "golang" { t.Errorf("tags[0].Name=%s", tags[0].Name) }
-	if tags[1].Name != "gopher" { t.Errorf("tags[1].Name=%s", tags[1].Name) }
-	if err := mock.ExpectationsWereMet(); err != nil { t.Error(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 2 {
+		t.Fatalf("len=%d want 2", len(tags))
+	}
+	if tags[0].Name != "golang" {
+		t.Errorf("tags[0].Name=%s", tags[0].Name)
+	}
+	if tags[1].Name != "gopher" {
+		t.Errorf("tags[1].Name=%s", tags[1].Name)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestTagSearch_Empty(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	rows := pgxmock.NewRows([]string{"tag_uid", "name", "home_region", "category_uid", "post_count", "last_active_at", "created_at", "updated_at"})
 	mock.ExpectQuery("SELECT").WithArgs("nonexistent", 20).WillReturnRows(rows)
 
 	tags, err := svc.SearchTags(context.Background(), "nonexistent", 20)
-	if err != nil { t.Fatal(err) }
-	if len(tags) != 0 { t.Errorf("len=%d want 0", len(tags)) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 0 {
+		t.Errorf("len=%d want 0", len(tags))
+	}
 }
 
 // ===== GetPopularTags =====
 
 func TestTagGetPopular(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 	now := time.Now().UTC()
 
@@ -198,15 +222,22 @@ func TestTagGetPopular(t *testing.T) {
 		WillReturnRows(rows)
 
 	tags, err := svc.GetPopularTags(context.Background(), 10)
-	if err != nil { t.Fatal(err) }
-	if len(tags) != 1 { t.Fatalf("len=%d", len(tags)) }
-	if tags[0].PostCount != 100 { t.Errorf("postCount=%d", tags[0].PostCount) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("len=%d", len(tags))
+	}
+	if tags[0].PostCount != 100 {
+		t.Errorf("postCount=%d", tags[0].PostCount)
+	}
 }
 
 // ===== GetTagByUID =====
 
 func TestTagGetByUID_Found(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 	now := time.Now().UTC()
 
@@ -220,27 +251,41 @@ func TestTagGetByUID_Found(t *testing.T) {
 		WillReturnRows(rows)
 
 	tag, err := svc.GetTagByUID(context.Background(), 600)
-	if err != nil { t.Fatal(err) }
-	if tag == nil { t.Fatal("expected tag") }
-	if tag.TagUID != 600 { t.Errorf("TagUID=%d", tag.TagUID) }
-	if tag.Name != "unique" { t.Errorf("Name=%s", tag.Name) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag == nil {
+		t.Fatal("expected tag")
+	}
+	if tag.TagUID != 600 {
+		t.Errorf("TagUID=%d", tag.TagUID)
+	}
+	if tag.Name != "unique" {
+		t.Errorf("Name=%s", tag.Name)
+	}
 }
 
 func TestTagGetByUID_NotFound(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	mock.ExpectQuery("SELECT").WithArgs(int64(999)).WillReturnError(pgx.ErrNoRows)
 
 	tag, err := svc.GetTagByUID(context.Background(), 999)
-	if err != nil { t.Fatal(err) }
-	if tag != nil { t.Error("expected nil") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag != nil {
+		t.Error("expected nil")
+	}
 }
 
 // ===== GetRegionsForTag =====
 
 func TestTagGetRegions(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	rows := pgxmock.NewRows([]string{"home_region"}).
@@ -250,23 +295,32 @@ func TestTagGetRegions(t *testing.T) {
 		WillReturnRows(rows)
 
 	regions, err := svc.GetRegionsForTag(context.Background(), 700)
-	if err != nil { t.Fatal(err) }
-	if len(regions) != 3 { t.Fatalf("len=%d", len(regions)) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(regions) != 3 {
+		t.Fatalf("len=%d", len(regions))
+	}
 	if regions[0] != "SEA" || regions[1] != "EU" || regions[2] != "NA" {
 		t.Errorf("regions=%v", regions)
 	}
 }
 
 func TestTagGetRegions_Empty(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
 	svc := NewGlobalTagIndexServiceWithDB(mock, logger.NewNop())
 
 	rows := pgxmock.NewRows([]string{"home_region"})
 	mock.ExpectQuery("SELECT DISTINCT").WithArgs(int64(888)).WillReturnRows(rows)
 
 	regions, err := svc.GetRegionsForTag(context.Background(), 888)
-	if err != nil { t.Fatal(err) }
-	if len(regions) != 0 { t.Errorf("len=%d", len(regions)) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(regions) != 0 {
+		t.Errorf("len=%d", len(regions))
+	}
 }
 
 func ptrI64(v int64) *int64 { return &v }

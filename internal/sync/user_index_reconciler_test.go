@@ -3,9 +3,9 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"fmt"
 	"testing"
 	"time"
 
@@ -130,7 +130,8 @@ func TestFetchPeerEntries_Timeout(t *testing.T) {
 // ===== reconcile =====
 
 func TestReconcile_SyncMissing(t *testing.T) {
-	mockDB, _ := pgxmock.NewPool(); defer mockDB.Close()
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
 	svc := service.NewGlobalIndexServiceWithDB(mockDB, logger.NewNop())
 
 	// Mock HTTP peer returns 2 users
@@ -165,7 +166,8 @@ func TestReconcile_SyncMissing(t *testing.T) {
 }
 
 func TestReconcile_NoMissing(t *testing.T) {
-	mockDB, _ := pgxmock.NewPool(); defer mockDB.Close()
+	mockDB, _ := pgxmock.NewPool()
+	defer mockDB.Close()
 	svc := service.NewGlobalIndexServiceWithDB(mockDB, logger.NewNop())
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
