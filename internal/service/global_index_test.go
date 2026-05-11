@@ -377,7 +377,7 @@ func TestGetPost_Found(t *testing.T) {
 	now := time.Now().UTC()
 
 	rows := pgxmock.NewRows([]string{
-		"post_slug", "author_uid", "author_region", "content_preview", "visibility",
+		"uid", "author_uid", "author_region", "content_preview", "visibility",
 		"hashtags", "mentions", "media_urls_str",
 		"likes_count", "comments_count", "shares_count", "views_count",
 		"gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at",
