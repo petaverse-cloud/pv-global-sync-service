@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.9
 
 require (
+	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/jackc/pgx/v5 v5.7.4
@@ -32,6 +33,7 @@ require (
 	github.com/tidwall/gjson v1.13.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.5.1 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect

@@ -28,10 +28,30 @@ import (
 //   - Following feed: 5 minutes
 //   - Global feed: 15 minutes
 //   - Trending feed: 1 minute
+// FeedRedisIF defines Redis operations needed by FeedGenerator.
+type FeedRedisIF interface {
+	AddToFeed(ctx context.Context, userID int64, feedType string, postID int64, score float64) error
+	Rdb() *redis.Client
+	GetFeed(ctx context.Context, userID int64, feedType string, offset, limit int64) ([]redis.Z, error)
+}
+
+// FeedDBIF defines DB operations needed by FeedGenerator.
+type FeedDBIF interface {
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+}
+
+// FeedIndexIF defines index operations needed by FeedGenerator.
+type FeedIndexIF interface {
+	GetPostsFromAuthors(ctx context.Context, authorIDs []int64, limit int) ([]GlobalIndexPost, error)
+	GetGlobalPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error)
+	GetTrendingPosts(ctx context.Context, limit int) ([]GlobalIndexPost, error)
+}
+
 type FeedGenerator struct {
-	regionalDB    *postgres.Manager
-	redis         *redispkg.Client
-	indexSvc      *GlobalIndexService
+	regionalDB    FeedDBIF
+	redis         FeedRedisIF
+	indexSvc      FeedIndexIF
 	log           *logger.Logger
 	pushThreshold int
 	feedTTLs      map[string]time.Duration
@@ -47,10 +67,22 @@ func FeedTTLs() map[string]time.Duration {
 }
 
 // NewFeedGenerator creates a new feed generator.
-func NewFeedGenerator(db *postgres.Manager, redis *redispkg.Client, indexSvc *GlobalIndexService, log *logger.Logger, pushThreshold int) *FeedGenerator {
+func NewFeedGenerator(db *postgres.Manager, redisClient *redispkg.Client, indexSvc *GlobalIndexService, log *logger.Logger, pushThreshold int) *FeedGenerator {
+	return &FeedGenerator{
+		regionalDB:    db.RegionalDB(),
+		redis:         redisClient,
+		indexSvc:      indexSvc,
+		log:           log,
+		pushThreshold: pushThreshold,
+		feedTTLs:      FeedTTLs(),
+	}
+}
+
+// NewFeedGeneratorForTest creates a feed generator for testing with mock deps.
+func NewFeedGeneratorForTest(db FeedDBIF, redisClient FeedRedisIF, indexSvc FeedIndexIF, log *logger.Logger, pushThreshold int) *FeedGenerator {
 	return &FeedGenerator{
 		regionalDB:    db,
-		redis:         redis,
+		redis:         redisClient,
 		indexSvc:      indexSvc,
 		log:           log,
 		pushThreshold: pushThreshold,
@@ -397,7 +429,7 @@ func (f *FeedGenerator) initialScore(createdAt time.Time) float64 {
 func (f *FeedGenerator) getFollowerCount(ctx context.Context, userID int64) (int, error) {
 	var count int
 	query := `SELECT followers_count FROM users WHERE uid = $1`
-	err := f.regionalDB.RegionalDB().QueryRow(ctx, query, userID).Scan(&count)
+	err := f.regionalDB.QueryRow(ctx, query, userID).Scan(&count)
 	if err == pgx.ErrNoRows {
 		// User not yet in Regional DB (managed by wigowago-api migrations).
 		// Safe fallback to pull mode — not an error.
@@ -408,7 +440,7 @@ func (f *FeedGenerator) getFollowerCount(ctx context.Context, userID int64) (int
 
 func (f *FeedGenerator) getFollowerIDs(ctx context.Context, userID int64) ([]int64, error) {
 	query := `SELECT follower_uid FROM user_follows WHERE following_uid = $1`
-	rows, err := f.regionalDB.RegionalDB().Query(ctx, query, userID)
+	rows, err := f.regionalDB.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +459,7 @@ func (f *FeedGenerator) getFollowerIDs(ctx context.Context, userID int64) ([]int
 
 func (f *FeedGenerator) getFollowingIDs(ctx context.Context, userID int64) ([]int64, error) {
 	query := `SELECT following_uid FROM user_follows WHERE follower_uid = $1`
-	rows, err := f.regionalDB.RegionalDB().Query(ctx, query, userID)
+	rows, err := f.regionalDB.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
