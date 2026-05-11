@@ -117,7 +117,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_media_ok",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     100,
+					PostUid:    100,
 					Visibility: model.VisibilityGlobal,
 					MediaURLs:  []string{"https://cdn.example.com/img1.jpg"},
 				},
@@ -134,7 +134,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_media_no_urls",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     101,
+					PostUid:    101,
 					Visibility: model.VisibilityGlobal,
 				},
 				Metadata: model.EventMetadata{
@@ -150,7 +150,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_empty_vis",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     102,
+					PostUid:    102,
 					Visibility: "",
 				},
 				Metadata: model.EventMetadata{
@@ -166,7 +166,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_unknown_vis",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     103,
+					PostUid:    103,
 					Visibility: "UNKNOWN",
 				},
 				Metadata: model.EventMetadata{
@@ -182,7 +182,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_sys_private",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     104,
+					PostUid:    104,
 					Visibility: model.VisibilityPrivate,
 				},
 				Metadata: model.EventMetadata{
@@ -197,7 +197,7 @@ func TestGDPRChecker_Check_MediaAndEdgeCases(t *testing.T) {
 				EventID:   "evt_pii_global_consent",
 				EventType: model.EventTypePostCreated,
 				Payload: model.EventPayload{
-					PostUid:     105,
+					PostUid:    105,
 					Visibility: model.VisibilityGlobal,
 				},
 				Metadata: model.EventMetadata{

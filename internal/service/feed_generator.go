@@ -28,6 +28,7 @@ import (
 //   - Following feed: 5 minutes
 //   - Global feed: 15 minutes
 //   - Trending feed: 1 minute
+//
 // FeedRedisIF defines Redis operations needed by FeedGenerator.
 type FeedRedisIF interface {
 	AddToFeed(ctx context.Context, userID int64, feedType string, postID int64, score float64) error

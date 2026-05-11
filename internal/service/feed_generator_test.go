@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"testing"
 	"errors"
+	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
@@ -45,12 +45,21 @@ func feedCacheKey(userID int64, feedType string) string {
 }
 
 func itoa(n int64) string {
-	if n == 0 { return "0" }
+	if n == 0 {
+		return "0"
+	}
 	s := ""
 	neg := n < 0
-	if neg { n = -n }
-	for n > 0 { s = string(rune('0'+n%10)) + s; n /= 10 }
-	if neg { s = "-" + s }
+	if neg {
+		n = -n
+	}
+	for n > 0 {
+		s = string(rune('0'+n%10)) + s
+		n /= 10
+	}
+	if neg {
+		s = "-" + s
+	}
 	return s
 }
 
