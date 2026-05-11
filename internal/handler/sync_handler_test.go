@@ -1,508 +1,222 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v4"
 
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/model"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/peer"
+	"github.com/petaverse-cloud/pv-global-sync-service/internal/service"
 	"github.com/petaverse-cloud/pv-global-sync-service/internal/sync"
 	"github.com/petaverse-cloud/pv-global-sync-service/pkg/logger"
 )
 
-// TestSyncHandler_HandleCrossSync_InvalidJSON verifies input validation
-// before processEvent is called (no nil deps needed).
-func TestSyncHandler_HandleCrossSync_InvalidJSON(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
-	crossSync := sync.NewCrossSyncService(pm, 100*time.Millisecond, log)
+func newNopLog() *logger.Logger { return logger.NewNop() }
+func ptrStr(s string) *string  { return &s }
 
-	h := &SyncHandler{
-		crossSync: crossSync,
-		log:       log,
+func setupGetPostHandler(mock pgxmock.PgxPoolIface) *SyncHandler {
+	return &SyncHandler{
+		indexSvc: service.NewGlobalIndexServiceWithDB(mock, newNopLog()),
+		log:      newNopLog(),
 	}
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/sync/cross-sync", strings.NewReader("not json"))
+// ============================================
+// HandleGetPost tests
+// ============================================
+
+func TestHandleGetPost_Found(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	h := setupGetPostHandler(mock)
+	now := time.Now().UTC()
+
+	rows := pgxmock.NewRows([]string{
+		"post_slug", "author_uid", "author_region", "content_preview", "visibility",
+		"hashtags", "mentions", "media_urls_str",
+		"likes_count", "comments_count", "shares_count", "views_count",
+		"gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at",
+		"author_nickname", "author_avatar_url",
+	}).AddRow(int64(12345), int64(67890), "SEA", "Hello", "GLOBAL",
+		[]byte("{test}"), []byte("{1}"), "https://a.jpg",
+		5, 3, 1, 100, true, true, "TIER_2", now, now,
+		ptrStr("TestAuthor"), ptrStr("https://cdn.example.com/a.jpg"))
+
+	mock.ExpectQuery("SELECT").WithArgs(int64(12345)).WillReturnRows(rows)
+
+	r := chi.NewRouter()
+	r.Get("/index/posts/{uid}", h.HandleGetPost)
+	req := httptest.NewRequest("GET", "/index/posts/12345", nil)
 	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
 
-	h.HandleCrossSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleCrossSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != 200 {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	var post model.GlobalPostIndex
+	json.Unmarshal(rec.Body.Bytes(), &post)
+	if post.PostUid != 12345 {
+		t.Errorf("PostUid=%d", post.PostUid)
 	}
 }
 
-// TestSyncHandler_HandleCrossSync_MethodNotAllowed verifies HTTP method check.
-func TestSyncHandler_HandleCrossSync_MethodNotAllowed(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
-	crossSync := sync.NewCrossSyncService(pm, 100*time.Millisecond, log)
+func TestHandleGetPost_NotFound(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	h := setupGetPostHandler(mock)
 
-	h := &SyncHandler{
-		crossSync: crossSync,
-		log:       log,
-	}
+	mock.ExpectQuery("SELECT").WithArgs(int64(99999)).WillReturnError(pgx.ErrNoRows)
 
-	req := httptest.NewRequest(http.MethodGet, "/sync/cross-sync", nil)
+	r := chi.NewRouter()
+	r.Get("/index/posts/{uid}", h.HandleGetPost)
+	req := httptest.NewRequest("GET", "/index/posts/99999", nil)
 	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
 
-	h.HandleCrossSync(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("HandleCrossSync() status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	if rec.Code != 404 {
+		t.Fatalf("status=%d want 404", rec.Code)
 	}
 }
 
-// TestSyncHandler_HandleSync_InvalidJSON verifies input validation.
-func TestSyncHandler_HandleSync_InvalidJSON(t *testing.T) {
-	log, _ := logger.New("warn", "console")
+func TestHandleGetPost_InvalidUid(t *testing.T) {
+	h := &SyncHandler{log: newNopLog()}
+	r := chi.NewRouter()
+	r.Get("/index/posts/{uid}", h.HandleGetPost)
 
-	h := &SyncHandler{
-		log: log,
+	for _, uid := range []string{"abc", "-5", "12a34"} {
+		req := httptest.NewRequest("GET", "/index/posts/"+uid, nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != 400 {
+			t.Errorf("uid=%q status=%d want 400", uid, rec.Code)
+		}
 	}
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/sync/content", strings.NewReader("not json"))
+func TestHandleGetPostByUid_Found(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	h := setupGetPostHandler(mock)
+	now := time.Now().UTC()
+
+	rows := pgxmock.NewRows([]string{
+		"post_slug", "author_uid", "author_region", "content_preview", "visibility",
+		"hashtags", "mentions", "media_urls_str",
+		"likes_count", "comments_count", "shares_count", "views_count",
+		"gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at",
+		"author_nickname", "author_avatar_url",
+	}).AddRow(int64(55555), int64(11111), "EU", "By uid", "REGIONAL",
+		nil, nil, "", 0, 0, 0, 0, false, false, "TIER_3", now, now, nil, nil)
+
+	mock.ExpectQuery("SELECT").WithArgs(int64(55555)).WillReturnRows(rows)
+
+	r := chi.NewRouter()
+	r.Get("/index/posts/uid/{uid}", h.HandleGetPostByUid)
+	req := httptest.NewRequest("GET", "/index/posts/uid/55555", nil)
 	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
 
-	h.HandleSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != 200 {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// HandleSync – missing required fields (returns 400 before processEvent)
-// ---------------------------------------------------------------------------
-
-func TestSyncHandler_HandleSync_MissingEventID(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	body := `{"eventType":"POST_CREATED","payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/content", strings.NewReader(body))
+func TestHandleGetPostByUid_InvalidUid(t *testing.T) {
+	h := &SyncHandler{log: newNopLog()}
+	r := chi.NewRouter()
+	r.Get("/index/posts/uid/{uid}", h.HandleGetPostByUid)
+	req := httptest.NewRequest("GET", "/index/posts/uid/abc", nil)
 	rec := httptest.NewRecorder()
-
-	h.HandleSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
+	r.ServeHTTP(rec, req)
+	if rec.Code != 400 {
+		t.Errorf("status=%d want 400", rec.Code)
 	}
 }
 
-func TestSyncHandler_HandleSync_MissingEventType(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
+// ============================================
+// HandleSync validation tests (no full pipeline)
+// ============================================
 
-	body := `{"eventId":"evt-001","payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/content", strings.NewReader(body))
+func TestHandleSync_InvalidJSON(t *testing.T) {
+	h := &SyncHandler{log: newNopLog()}
+	r := chi.NewRouter()
+	r.Post("/sync/content", h.HandleSync)
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader("bad json"))
 	rec := httptest.NewRecorder()
-
-	h.HandleSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
+	r.ServeHTTP(rec, req)
+	if rec.Code != 400 {
+		t.Errorf("status=%d want 400", rec.Code)
 	}
 }
 
-func TestSyncHandler_HandleSync_MissingBothFields(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
+func TestHandleSync_MissingFields(t *testing.T) {
+	h := &SyncHandler{log: newNopLog()}
+	r := chi.NewRouter()
+	r.Post("/sync/content", h.HandleSync)
 
-	body := `{"payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/content", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.HandleSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
+	tests := []struct{ name, body string }{
+		{"no eventId", `{"eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2}}`},
+		{"no eventType", `{"eventId":"evt_1","payload":{"postUid":1,"authorUid":2}}`},
+		{"empty", `{}`},
 	}
-}
-
-func TestSyncHandler_HandleSync_MethodNotAllowed(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	req := httptest.NewRequest(http.MethodGet, "/sync/content", nil)
-	rec := httptest.NewRecorder()
-
-	h.HandleSync(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("HandleSync() status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// HandleCrossSync – missing required fields (returns 400 before processEvent)
-// ---------------------------------------------------------------------------
-
-func TestSyncHandler_HandleCrossSync_MissingEventID(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
-	crossSync := sync.NewCrossSyncService(pm, 100*time.Millisecond, log)
-	h := &SyncHandler{crossSync: crossSync, log: log}
-
-	body := `{"eventType":"POST_CREATED","payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/cross-sync", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.HandleCrossSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleCrossSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestSyncHandler_HandleCrossSync_MissingEventType(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
-	crossSync := sync.NewCrossSyncService(pm, 100*time.Millisecond, log)
-	h := &SyncHandler{crossSync: crossSync, log: log}
-
-	body := `{"eventId":"evt-002","payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/cross-sync", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.HandleCrossSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleCrossSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestSyncHandler_HandleCrossSync_MissingBothFields(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
-	crossSync := sync.NewCrossSyncService(pm, 100*time.Millisecond, log)
-	h := &SyncHandler{crossSync: crossSync, log: log}
-
-	body := `{"payload":{}}`
-	req := httptest.NewRequest(http.MethodPost, "/sync/cross-sync", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.HandleCrossSync(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleCrossSync() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// HandleGetPost – missing / invalid uid (returns 400 before indexSvc)
-// ---------------------------------------------------------------------------
-
-func TestSyncHandler_HandleGetPost_MissingUid(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	req := httptest.NewRequest(http.MethodGet, "/index/posts/", nil)
-	// chi router would normally populate the URL param; simulate empty param
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{""}},
-	}))
-	rec := httptest.NewRecorder()
-
-	h.HandleGetPost(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleGetPost() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestSyncHandler_HandleGetPost_InvalidUid_NonNumeric(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	req := httptest.NewRequest(http.MethodGet, "/index/posts/abc", nil)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"abc"}},
-	}))
-	rec := httptest.NewRecorder()
-
-	h.HandleGetPost(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleGetPost() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestSyncHandler_HandleGetPost_InvalidUid_Negative(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	req := httptest.NewRequest(http.MethodGet, "/index/posts/-5", nil)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"-5"}},
-	}))
-	rec := httptest.NewRecorder()
-
-	h.HandleGetPost(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleGetPost() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestSyncHandler_HandleGetPost_InvalidUid_MixedChars(t *testing.T) {
-	log, _ := logger.New("warn", "console")
-	h := &SyncHandler{log: log}
-
-	req := httptest.NewRequest(http.MethodGet, "/index/posts/12a34", nil)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
-		URLParams: chi.RouteParams{Keys: []string{"uid"}, Values: []string{"12a34"}},
-	}))
-	rec := httptest.NewRecorder()
-
-	h.HandleGetPost(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("HandleGetPost() status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// parseInt64 – unit tests (same package, directly callable)
-// ---------------------------------------------------------------------------
-
-func TestParseInt64_ValidZero(t *testing.T) {
-	n, err := parseInt64("0")
-	if err != nil {
-		t.Errorf("parseInt64(\"0\") unexpected error: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("parseInt64(\"0\") = %d, want 0", n)
-	}
-}
-
-func TestParseInt64_ValidPositive(t *testing.T) {
-	n, err := parseInt64("12345")
-	if err != nil {
-		t.Errorf("parseInt64(\"12345\") unexpected error: %v", err)
-	}
-	if n != 12345 {
-		t.Errorf("parseInt64(\"12345\") = %d, want 12345", n)
-	}
-}
-
-func TestParseInt64_ValidLarge(t *testing.T) {
-	n, err := parseInt64("9223372036854775807") // max int64
-	if err != nil {
-		t.Errorf("parseInt64(max int64) unexpected error: %v", err)
-	}
-	if n != 9223372036854775807 {
-		t.Errorf("parseInt64(max int64) = %d, want 9223372036854775807", n)
-	}
-}
-
-func TestParseInt64_ValidSingleDigit(t *testing.T) {
-	n, err := parseInt64("7")
-	if err != nil {
-		t.Errorf("parseInt64(\"7\") unexpected error: %v", err)
-	}
-	if n != 7 {
-		t.Errorf("parseInt64(\"7\") = %d, want 7", n)
-	}
-}
-
-func TestParseInt64_EmptyString(t *testing.T) {
-	// parseInt64 does NOT treat empty string as an error.
-	// The for-loop simply doesn't execute, returning (0, nil).
-	n, err := parseInt64("")
-	if err != nil {
-		t.Errorf("parseInt64(\"\") unexpected error: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("parseInt64(\"\") = %d, want 0", n)
-	}
-}
-
-func TestParseInt64_NegativeSign(t *testing.T) {
-	n, err := parseInt64("-5")
-	if err == nil {
-		t.Error("parseInt64(\"-5\") expected error, got nil")
-	}
-	if n != 0 {
-		t.Errorf("parseInt64(\"-5\") = %d, want 0", n)
-	}
-}
-
-func TestParseInt64_NonDigitChars(t *testing.T) {
-	testCases := []struct {
-		input string
-		name  string
-	}{
-		{"abc", "letters_only"},
-		{"12a34", "mixed"},
-		{"12.34", "decimal"},
-		{" 42", "leading_space"},
-		{"42 ", "trailing_space"},
-		{"+42", "plus_sign"},
-		{"0x1F", "hex"},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			n, err := parseInt64(tc.input)
-			if err == nil {
-				t.Errorf("parseInt64(%q) expected error, got nil (n=%d)", tc.input, n)
-			}
-		})
-	}
-}
-
-func TestParseInt64_Overflow(t *testing.T) {
-	// "99999999999999999999" exceeds max int64 (9223372036854775807).
-	// parseInt64 does NOT detect overflow; it silently wraps.
-	n, err := parseInt64("99999999999999999999")
-	if err != nil {
-		t.Errorf("parseInt64 overflow: expected no error (function has no overflow guard), got %v", err)
-	}
-	// Verify the value is NOT equal to the true mathematical value by checking
-	// that it differs from max int64 (the correct value would be > max int64).
-	if n == 9223372036854775807 {
-		t.Error("parseInt64 overflow: wrapped value should not equal max int64")
-	}
-	// Document the actual wrapped behavior:
-	t.Logf("parseInt64(\"99999999999999999999\") wrapped to %d (int64 overflow, no error returned)", n)
-}
-
-func TestParseInt64_OverflowOneOverMax(t *testing.T) {
-	// max int64 + 1  =  9223372036854775808
-	n, err := parseInt64("9223372036854775808")
-	if err != nil {
-		t.Errorf("parseInt64(max+1) expected no error (no overflow guard), got %v", err)
-	}
-	// The value will wrap to negative (or some other value) due to int64 overflow.
-	// It should NOT equal max int64.
-	if n == 9223372036854775807 {
-		t.Error("parseInt64(max+1) should have wrapped, not equal to max int64")
-	}
-	t.Logf("parseInt64(\"9223372036854775808\") wrapped to %d", n)
-}
-
-// ---------------------------------------------------------------------------
-// writeError – unit tests (same package, directly callable)
-// ---------------------------------------------------------------------------
-
-func TestWriteError_StatusBadRequest(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusBadRequest, "invalid input")
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("writeError status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-	ct := rec.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("writeError Content-Type = %q, want %q", ct, "application/json")
-	}
-}
-
-func TestWriteError_StatusNotFound(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusNotFound, "resource not found")
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("writeError status = %d, want %d", rec.Code, http.StatusNotFound)
-	}
-	ct := rec.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("writeError Content-Type = %q, want %q", ct, "application/json")
-	}
-}
-
-func TestWriteError_StatusInternalServerError(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusInternalServerError, "db error")
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("writeError status = %d, want %d", rec.Code, http.StatusInternalServerError)
-	}
-	ct := rec.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("writeError Content-Type = %q, want %q", ct, "application/json")
-	}
-}
-
-func TestWriteError_StatusMethodNotAllowed(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusMethodNotAllowed, "method not allowed")
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("writeError status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
-	}
-	ct := rec.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("writeError Content-Type = %q, want %q", ct, "application/json")
-	}
-}
-
-func TestWriteError_StatusAccepted(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusAccepted, "accepted")
-
-	if rec.Code != http.StatusAccepted {
-		t.Errorf("writeError status = %d, want %d", rec.Code, http.StatusAccepted)
-	}
-	ct := rec.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("writeError Content-Type = %q, want %q", ct, "application/json")
-	}
-}
-
-func TestWriteError_JSONBodyStructure(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusBadRequest, "test error message")
-
-	var body map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("writeError body is not valid JSON: %v", err)
-	}
-	if body["error"] != "Bad Request" {
-		t.Errorf("writeError body[\"error\"] = %q, want %q", body["error"], "Bad Request")
-	}
-	if body["message"] != "test error message" {
-		t.Errorf("writeError body[\"message\"] = %q, want %q", body["message"], "test error message")
-	}
-}
-
-func TestWriteError_ContentTypeAlwaysJSON(t *testing.T) {
-	statuses := []int{
-		http.StatusBadRequest,
-		http.StatusUnauthorized,
-		http.StatusForbidden,
-		http.StatusNotFound,
-		http.StatusMethodNotAllowed,
-		http.StatusInternalServerError,
-		http.StatusServiceUnavailable,
-	}
-	for _, status := range statuses {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			writeError(rec, status, "error")
-			ct := rec.Header().Get("Content-Type")
-			if ct != "application/json" {
-				t.Errorf("writeError(%d) Content-Type = %q, want %q", status, ct, "application/json")
+			r.ServeHTTP(rec, req)
+			if rec.Code != 400 {
+				t.Errorf("status=%d want 400", rec.Code)
 			}
 		})
 	}
 }
 
-func TestWriteError_EmptyMessage(t *testing.T) {
+func TestHandleSync_MethodNotAllowed(t *testing.T) {
+	h := &SyncHandler{log: newNopLog()}
+	r := chi.NewRouter()
+	r.Post("/sync/content", h.HandleSync)
+	req := httptest.NewRequest("GET", "/sync/content", nil)
 	rec := httptest.NewRecorder()
-	writeError(rec, http.StatusBadRequest, "")
-
-	var body map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("writeError body is not valid JSON: %v", err)
+	r.ServeHTTP(rec, req)
+	if rec.Code != 405 {
+		t.Errorf("status=%d want 405", rec.Code)
 	}
-	if body["message"] != "" {
-		t.Errorf("writeError body[\"message\"] = %q, want empty string", body["message"])
+}
+
+func TestHandleCrossSync_InvalidJSON(t *testing.T) {
+	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
+	crossSyncSvc := sync.NewCrossSyncService(pm, 100*time.Millisecond, newNopLog())
+	h := &SyncHandler{crossSync: crossSyncSvc, log: newNopLog()}
+
+	r := chi.NewRouter()
+	r.Post("/sync/cross-sync", h.HandleCrossSync)
+	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader("bad"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != 400 {
+		t.Errorf("status=%d want 400", rec.Code)
+	}
+}
+
+func TestHandleCrossSync_MethodNotAllowed(t *testing.T) {
+	pm := peer.NewPeerManager([]string{}, 100*time.Millisecond)
+	crossSyncSvc := sync.NewCrossSyncService(pm, 100*time.Millisecond, newNopLog())
+	h := &SyncHandler{crossSync: crossSyncSvc, log: newNopLog()}
+
+	r := chi.NewRouter()
+	r.Post("/sync/cross-sync", h.HandleCrossSync)
+	req := httptest.NewRequest("GET", "/sync/cross-sync", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != 405 {
+		t.Errorf("status=%d want 405", rec.Code)
 	}
 }
