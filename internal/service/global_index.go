@@ -17,7 +17,6 @@ import (
 
 // GlobalIndexPost is a simplified post representation from the global index.
 type GlobalIndexPost struct {
-	PostID         int64
 	PostUid        int64
 	AuthorUid      int64
 	ContentPreview string
@@ -455,7 +454,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 	posts := make([]GlobalIndexPost, 0)
 	for rows.Next() {
 		var p GlobalIndexPost
-		if err := rows.Scan(&p.PostID, &p.PostUid, &p.AuthorUid, &p.ContentPreview,
+		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
