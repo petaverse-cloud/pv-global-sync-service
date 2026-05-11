@@ -16,13 +16,43 @@ import (
 
 // SyncConsumer processes sync events from RocketMQ.
 type SyncConsumer struct {
-	eventLog      *service.SyncEventLogService
-	gdprChecker   *service.GDPRChecker
-	indexSvc      *service.GlobalIndexService
-	auditSvc      *service.AuditLogService
-	feedGenerator *service.FeedGenerator
+	eventLog      EventLogIF
+	gdprChecker   GDPRCheckerIF
+	indexSvc      IndexSvcIF
+	auditSvc      AuditLoggerIF
+	feedGenerator FeedGenIF
 	regionalDB    *pgxpool.Pool
 	log           *logger.Logger
+}
+
+// EventLogIF defines event log interface.
+type EventLogIF interface {
+	IsProcessed(ctx context.Context, eventID string) (bool, error)
+	MarkProcessed(ctx context.Context, event *model.CrossRegionSyncEvent, errMsg string) error
+}
+
+// GDPRCheckerIF defines GDPR checker interface.
+type GDPRCheckerIF interface {
+	Check(event *model.CrossRegionSyncEvent) service.CheckResult
+}
+
+// IndexSvcIF defines index service interface.
+type IndexSvcIF interface {
+	InsertPost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	UpdatePost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	DeletePost(ctx context.Context, event *model.CrossRegionSyncEvent) error
+	UpdateStats(ctx context.Context, postUid int64, likes, comments, shares, views int) error
+}
+
+// AuditLoggerIF defines audit log interface.
+type AuditLoggerIF interface {
+	Log(ctx context.Context, event *model.CrossRegionSyncEvent, allowed bool, reason string) error
+}
+
+// FeedGenIF defines feed generator interface.
+type FeedGenIF interface {
+	HandleNewPost(ctx context.Context, authorUid int64, postUid int64) error
+	HandleDeletedPost(ctx context.Context, postUid int64) error
 }
 
 // NewSyncConsumer creates a new sync event consumer.

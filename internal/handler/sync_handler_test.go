@@ -275,3 +275,60 @@ func TestHandleSync_MissingFields(t *testing.T) {
 		if rec.Code != 400 { t.Errorf("%s: status=%d", tt.n, rec.Code) }
 	}
 }
+
+// ===== HandleSync/HandleCrossSync full pipeline =====
+
+func TestHandleSync_FullPipeline_Success(t *testing.T) {
+	el := &mockEventLog{processed: map[string]bool{}}
+	h := &SyncHandler{
+		eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{},
+		indexSvc: &mockIndexSvc{}, feedGenerator: &mockFeedGen{}, log: logger.NewNop(),
+	}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
+
+	body := `{"eventId":"evt_full","eventType":"POST_CREATED","sourceRegion":"SEA","targetRegion":"EU","timestamp":1700000000,"payload":{"postUid":900,"authorUid":800,"authorRegion":"SEA","visibility":"GLOBAL","content":"test"},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("status=%d want 202, body=%s", rec.Code, rec.Body.String()) }
+	if !el.processed["evt_full"] { t.Error("not marked processed") }
+}
+
+func TestHandleSync_FullPipeline_GDPRDenied(t *testing.T) {
+	el := &mockEventLog{processed: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
+	body := `{"eventId":"evt_gdpr","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_1"}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("GDPR deny should 202, got %d", rec.Code) }
+	if !el.processed["evt_gdpr"] { t.Error("should mark processed") }
+}
+
+func TestHandleSync_FullPipeline_RouteError(t *testing.T) {
+	el := &mockEventLog{processed: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{}, indexSvc: &mockIndexSvc{insertErr: errors.New("db down")}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
+	body := `{"eventId":"evt_err","eventType":"POST_CREATED","payload":{"postUid":900,"authorUid":800},"metadata":{"dataCategory":"TIER_2"}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 500 { t.Fatalf("route err should 500, got %d", rec.Code) }
+}
+
+func TestHandleCrossSync_FullPipeline_Success(t *testing.T) {
+	el := &mockEventLog{processed: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{}, indexSvc: &mockIndexSvc{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/cross-sync", h.HandleCrossSync)
+	body := `{"eventId":"evt_cross","eventType":"POST_UPDATED","payload":{"postUid":901,"authorUid":801},"metadata":{"dataCategory":"TIER_2"}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("status=%d want 202", rec.Code) }
+	if !el.processed["evt_cross"] { t.Error("not marked") }
+}
