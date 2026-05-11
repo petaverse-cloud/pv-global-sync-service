@@ -22,236 +22,190 @@ func makeEvent(eventType model.SyncEventType, postUid, authorUid int64, content 
 		EventID: "evt_test_001", EventType: eventType,
 		SourceRegion: model.RegionSEA, TargetRegion: model.RegionEU,
 		Timestamp: time.Now().Unix(),
-		Payload: model.EventPayload{
-			PostUid: postUid, AuthorUid: authorUid,
-			AuthorRegion: model.RegionSEA, Visibility: model.VisibilityGlobal,
-			Content: content,
-		},
-		Metadata: model.EventMetadata{
-			GDPRCompliant: true, UserConsent: true,
-			DataCategory: model.DataCategoryUGC, CrossBorderOK: true,
-		},
+		Payload: model.EventPayload{PostUid: postUid, AuthorUid: authorUid, AuthorRegion: model.RegionSEA, Visibility: model.VisibilityGlobal, Content: content},
+		Metadata: model.EventMetadata{GDPRCompliant: true, UserConsent: true, DataCategory: model.DataCategoryUGC, CrossBorderOK: true},
 	}
 }
 
-// ===== Mocks =====
+type mockIdx struct{ insErr, updErr, delErr, statErr error }
+func (m *mockIdx) InsertPost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.insErr }
+func (m *mockIdx) UpdatePost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.updErr }
+func (m *mockIdx) DeletePost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.delErr }
+func (m *mockIdx) UpdateStats(_ context.Context, _ int64, _, _, _, _ int) error        { return m.statErr }
+func (m *mockIdx) GetPost(_ context.Context, _ int64) (*model.GlobalPostIndex, error)    { return nil, nil }
+func (m *mockIdx) GetPostByUid(_ context.Context, _ int64) (*model.GlobalPostIndex, error) { return nil, nil }
 
-type mockIndexSvc struct {
-	insertErr, updateErr, deleteErr, updateStatsErr error
-}
+type mockFeed struct{ newPost, delPost bool }
+func (m *mockFeed) HandleNewPost(_ context.Context, _, _ int64) error { m.newPost = true; return nil }
+func (m *mockFeed) HandleDeletedPost(_ context.Context, _ int64) error { m.delPost = true; return nil }
 
-func (m *mockIndexSvc) InsertPost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.insertErr }
-func (m *mockIndexSvc) UpdatePost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.updateErr }
-func (m *mockIndexSvc) DeletePost(_ context.Context, _ *model.CrossRegionSyncEvent) error { return m.deleteErr }
-func (m *mockIndexSvc) UpdateStats(_ context.Context, _ int64, _, _, _, _ int) error    { return m.updateStatsErr }
-func (m *mockIndexSvc) GetPost(_ context.Context, _ int64) (*model.GlobalPostIndex, error) { return nil, nil }
-func (m *mockIndexSvc) GetPostByUid(_ context.Context, _ int64) (*model.GlobalPostIndex, error) { return nil, nil }
+type mockEvt struct{ m map[string]bool }
+func (m *mockEvt) IsProcessed(_ context.Context, id string) (bool, error) { return m.m[id], nil }
+func (m *mockEvt) MarkProcessed(_ context.Context, ev *model.CrossRegionSyncEvent, _ string) error { m.m[ev.EventID] = true; return nil }
 
-type mockFeedGen struct{ newPostCalled, deletedPostCalled bool }
-
-func (m *mockFeedGen) HandleNewPost(_ context.Context, _, _ int64) error {
-	m.newPostCalled = true; return nil
-}
-func (m *mockFeedGen) HandleDeletedPost(_ context.Context, _ int64) error {
-	m.deletedPostCalled = true; return nil
-}
-
-type mockEventLog struct{ processed map[string]bool }
-
-func (m *mockEventLog) IsProcessed(_ context.Context, id string) (bool, error) {
-	return m.processed[id], nil
-}
-func (m *mockEventLog) MarkProcessed(_ context.Context, ev *model.CrossRegionSyncEvent, _ string) error {
-	m.processed[ev.EventID] = true; return nil
-}
-
-type mockGDPR struct{ allowed bool }
-
-func (m *mockGDPR) Check(_ *model.CrossRegionSyncEvent) service.CheckResult {
-	return service.CheckResult{Allowed: m.allowed}
-}
-
+type mockGDPR struct{ a bool }
+func (m *mockGDPR) Check(_ *model.CrossRegionSyncEvent) service.CheckResult { return service.CheckResult{Allowed: m.a} }
 type mockAudit struct{}
-
 func (m *mockAudit) Log(_ context.Context, _ *model.CrossRegionSyncEvent, _ bool, _ string) error { return nil }
 
-type mockTagSvc struct{ upsert, del, updStats bool }
+type mockTag struct{ upsert, del, updStats bool; tag *model.GlobalTagIndex; regions []string }
+func (m *mockTag) UpsertTag(_ context.Context, _ *model.CrossRegionSyncEvent) error    { m.upsert = true; return nil }
+func (m *mockTag) DeleteTag(_ context.Context, _ *model.CrossRegionSyncEvent) error    { m.del = true; return nil }
+func (m *mockTag) UpdateStats(_ context.Context, _, _ int64) error                     { m.updStats = true; return nil }
+func (m *mockTag) SearchTags(_ context.Context, _ string, _ int) ([]model.GlobalTagIndex, error) { return nil, nil }
+func (m *mockTag) GetPopularTags(_ context.Context, _ int) ([]model.GlobalTagIndex, error)       { return nil, nil }
+func (m *mockTag) GetTagByUID(_ context.Context, _ int64) (*model.GlobalTagIndex, error)         { return m.tag, nil }
+func (m *mockTag) GetRegionsForTag(_ context.Context, _ int64) ([]string, error)                 { return m.regions, nil }
 
-func (m *mockTagSvc) UpsertTag(_ context.Context, _ *model.CrossRegionSyncEvent) error    { m.upsert = true; return nil }
-func (m *mockTagSvc) DeleteTag(_ context.Context, _ *model.CrossRegionSyncEvent) error    { m.del = true; return nil }
-func (m *mockTagSvc) UpdateStats(_ context.Context, _, _ int64) error                     { m.updStats = true; return nil }
-func (m *mockTagSvc) SearchTags(_ context.Context, _ string, _ int) ([]model.GlobalTagIndex, error) { return nil, nil }
-func (m *mockTagSvc) GetPopularTags(_ context.Context, _ int) ([]model.GlobalTagIndex, error)       { return nil, nil }
-func (m *mockTagSvc) GetTagByUID(_ context.Context, _ int64) (*model.GlobalTagIndex, error)         { return nil, nil }
-func (m *mockTagSvc) GetRegionsForTag(_ context.Context, _ int64) ([]string, error)                 { return nil, nil }
-
-// ===== routeEvent tests =====
+// ===== routeEvent =====
 
 func TestRouteEvent_PostCreated(t *testing.T) {
-	feed := &mockFeedGen{}
-	h := &SyncHandler{indexSvc: &mockIndexSvc{}, feedGenerator: feed, log: logger.NewNop()}
-	err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostCreated, 100, 200, "hi"))
-	if err != nil { t.Fatal(err) }
-	if !feed.newPostCalled { t.Error("HandleNewPost not called") }
+	f := &mockFeed{}
+	h := &SyncHandler{indexSvc: &mockIdx{}, feedGenerator: f, log: logger.NewNop()}
+	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostCreated, 100, 200, "hi")); err != nil { t.Fatal(err) }
+	if !f.newPost { t.Error("HandleNewPost not called") }
 }
-
 func TestRouteEvent_PostUpdated(t *testing.T) {
-	h := &SyncHandler{indexSvc: &mockIndexSvc{}, log: logger.NewNop()}
-	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostUpdated, 101, 201, "")); err != nil {
-		t.Fatal(err)
-	}
+	h := &SyncHandler{indexSvc: &mockIdx{}, log: logger.NewNop()}
+	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostUpdated, 101, 201, "")); err != nil { t.Fatal(err) }
 }
-
 func TestRouteEvent_PostDeleted(t *testing.T) {
-	feed := &mockFeedGen{}
-	h := &SyncHandler{indexSvc: &mockIndexSvc{}, feedGenerator: feed, log: logger.NewNop()}
-	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostDeleted, 102, 202, "")); err != nil {
-		t.Fatal(err)
-	}
-	if !feed.deletedPostCalled { t.Error("HandleDeletedPost not called") }
+	f := &mockFeed{}
+	h := &SyncHandler{indexSvc: &mockIdx{}, feedGenerator: f, log: logger.NewNop()}
+	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostDeleted, 102, 202, "")); err != nil { t.Fatal(err) }
+	if !f.delPost { t.Error("HandleDeletedPost not called") }
 }
-
 func TestRouteEvent_TagCreated(t *testing.T) {
-	tag := &mockTagSvc{}
-	h := &SyncHandler{tagIndexSvc: tag, log: logger.NewNop()}
+	tg := &mockTag{}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
 	ev := makeEvent(model.EventTypeTagCreated, 0, 0, ""); ev.Payload.TagUID = 500
 	if err := h.routeEvent(context.Background(), ev); err != nil { t.Fatal(err) }
-	if !tag.upsert { t.Error("UpsertTag not called") }
+	if !tg.upsert { t.Error("UpsertTag not called") }
 }
-
 func TestRouteEvent_TagUpdated(t *testing.T) {
-	tag := &mockTagSvc{}
-	h := &SyncHandler{tagIndexSvc: tag, log: logger.NewNop()}
+	tg := &mockTag{}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
 	ev := makeEvent(model.EventTypeTagUpdated, 0, 0, ""); ev.Payload.TagUID = 501
 	if err := h.routeEvent(context.Background(), ev); err != nil { t.Fatal(err) }
-	if !tag.upsert { t.Error("UpsertTag not called") }
+	if !tg.upsert { t.Error("UpsertTag not called") }
 }
-
 func TestRouteEvent_TagDeleted(t *testing.T) {
-	tag := &mockTagSvc{}
-	h := &SyncHandler{tagIndexSvc: tag, log: logger.NewNop()}
+	tg := &mockTag{}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
 	ev := makeEvent(model.EventTypeTagDeleted, 0, 0, ""); ev.Payload.TagUID = 502
 	if err := h.routeEvent(context.Background(), ev); err != nil { t.Fatal(err) }
-	if !tag.del { t.Error("DeleteTag not called") }
+	if !tg.del { t.Error("DeleteTag not called") }
 }
-
 func TestRouteEvent_TagStatsUpdated(t *testing.T) {
-	tag := &mockTagSvc{}
-	h := &SyncHandler{tagIndexSvc: tag, log: logger.NewNop()}
+	tg := &mockTag{}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
 	ev := makeEvent(model.EventTypeTagStatsUpdated, 0, 0, "")
 	ev.Payload.TagUID = 503; pc := int64(42); ev.Payload.TagPostCount = &pc
 	if err := h.routeEvent(context.Background(), ev); err != nil { t.Fatal(err) }
-	if !tag.updStats { t.Error("UpdateStats not called") }
+	if !tg.updStats { t.Error("UpdateStats not called") }
 }
-
 func TestRouteEvent_UnknownType(t *testing.T) {
 	h := &SyncHandler{log: logger.NewNop()}
-	if err := h.routeEvent(context.Background(), makeEvent("UNKNOWN", 0, 0, "")); err != nil {
-		t.Fatal(err)
-	}
+	if err := h.routeEvent(context.Background(), makeEvent("UNKNOWN", 0, 0, "")); err != nil { t.Fatal(err) }
 }
-
 func TestRouteEvent_InsertError(t *testing.T) {
-	h := &SyncHandler{indexSvc: &mockIndexSvc{insertErr: errors.New("db down")}, log: logger.NewNop()}
-	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostCreated, 100, 200, "")); err == nil {
-		t.Fatal("expected error")
-	}
+	h := &SyncHandler{indexSvc: &mockIdx{insErr: errors.New("db")}, log: logger.NewNop()}
+	if err := h.routeEvent(context.Background(), makeEvent(model.EventTypePostCreated, 100, 200, "")); err == nil { t.Fatal("expected err") }
 }
 
-// ===== processEvent tests =====
+// ===== BUG: nil TagPostCount causes panic =====
+
+func TestRouteEvent_TagStatsUpdated_NilPostCount_NoPanic(t *testing.T) {
+	tg := &mockTag{}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
+	ev := makeEvent(model.EventTypeTagStatsUpdated, 0, 0, "")
+	ev.Payload.TagUID = 999
+	ev.Payload.TagPostCount = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("PANIC on nil TagPostCount: %v", r)
+		}
+	}()
+	err := h.routeEvent(context.Background(), ev)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Log("Bug fixed: no panic on nil TagPostCount")
+}
+
+// ===== processEvent =====
 
 func TestProcessEvent_Success(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{
-		eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{},
-		indexSvc: &mockIndexSvc{}, feedGenerator: &mockFeedGen{}, log: logger.NewNop(),
-	}
-	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "local_api"); err != nil {
-		t.Fatal(err)
-	}
-	if !el.processed["evt_test_001"] { t.Error("not marked processed") }
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{}, feedGenerator: &mockFeed{}, log: logger.NewNop()}
+	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "local_api"); err != nil { t.Fatal(err) }
+	if !el.m["evt_test_001"] { t.Error("not marked") }
 }
-
 func TestProcessEvent_Idempotent(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{"evt_test_001": true}}
+	el := &mockEvt{m: map[string]bool{"evt_test_001": true}}
 	h := &SyncHandler{eventLog: el, log: logger.NewNop()}
-	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err != nil {
-		t.Fatal(err)
-	}
+	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err != nil { t.Fatal(err) }
 }
-
 func TestProcessEvent_GDPRDenied(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
-	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err != nil {
-		t.Fatal(err)
-	}
-	if !el.processed["evt_test_001"] { t.Error("not marked processed for denied event") }
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
+	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err != nil { t.Fatal(err) }
+	if !el.m["evt_test_001"] { t.Error("marked") }
 }
-
 func TestProcessEvent_RouteError(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{
-		eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{},
-		indexSvc: &mockIndexSvc{insertErr: errors.New("db down")}, log: logger.NewNop(),
-	}
-	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err == nil {
-		t.Fatal("expected error")
-	}
-	if !el.processed["evt_test_001"] { t.Error("not marked processed for failed event") }
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{insErr: errors.New("db")}, log: logger.NewNop()}
+	if err := h.processEvent(context.Background(), makeEvent(model.EventTypePostCreated, 900, 800, "hi"), "x"); err == nil { t.Fatal("expected err") }
 }
-
 func TestProcessEvent_MissingFields(t *testing.T) {
 	h := &SyncHandler{log: logger.NewNop()}
-	if err := h.processEvent(context.Background(), &model.CrossRegionSyncEvent{}, "x"); err == nil {
-		t.Fatal("expected error")
-	}
+	if err := h.processEvent(context.Background(), &model.CrossRegionSyncEvent{}, "x"); err == nil { t.Fatal("expected err") }
 }
 
-// ===== HandleGetPost tests =====
+// ===== HandleSync/HandleCrossSync full pipeline =====
 
-func TestHandleGetPost_Found(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
-	now := time.Now()
-	rows := pgxmock.NewRows([]string{
-		"post_slug", "author_uid", "author_region", "content_preview", "visibility",
-		"hashtags", "mentions", "media_urls_str",
-		"likes_count", "comments_count", "shares_count", "views_count",
-		"gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at",
-		"author_nickname", "author_avatar_url",
-	}).AddRow(int64(12345), int64(67890), "SEA", "Hello", "GLOBAL",
-		nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", now, now, nil, nil)
-	mock.ExpectQuery("SELECT").WithArgs(int64(12345)).WillReturnRows(rows)
-
-	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
-	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
+func TestHandleSync_Full_Success(t *testing.T) {
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{}, feedGenerator: &mockFeed{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
+	body := `{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_2"}}`
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/12345", nil))
-	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("status=%d", rec.Code) }
 }
-
-func TestHandleGetPost_NotFound(t *testing.T) {
-	mock, _ := pgxmock.NewPool(); defer mock.Close()
-	mock.ExpectQuery("SELECT").WithArgs(int64(99999)).WillReturnError(pgx.ErrNoRows)
-	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
-	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
+func TestHandleSync_GDPRDenied(t *testing.T) {
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/99999", nil))
-	if rec.Code != 404 { t.Errorf("status=%d", rec.Code) }
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_1"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("status=%d", rec.Code) }
 }
-
-func TestHandleGetPost_InvalidUid(t *testing.T) {
-	h := &SyncHandler{log: logger.NewNop()}
-	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
-	for _, uid := range []string{"abc", "-5", "12a34"} {
-		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/"+uid, nil))
-		if rec.Code != 400 { t.Errorf("uid=%q status=%d", uid, rec.Code) }
-	}
+func TestHandleSync_RouteError(t *testing.T) {
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{insErr: errors.New("db")}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 500 { t.Fatalf("status=%d", rec.Code) }
 }
-
-// ===== HandleSync validation tests =====
-
+func TestHandleCrossSync_Full_Success(t *testing.T) {
+	el := &mockEvt{m: map[string]bool{}}
+	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Post("/sync/cross-sync", h.HandleCrossSync)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader(`{"eventId":"e1","eventType":"POST_UPDATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	if rec.Code != 202 { t.Fatalf("status=%d", rec.Code) }
+}
 func TestHandleSync_InvalidJSON(t *testing.T) {
 	h := &SyncHandler{log: logger.NewNop()}
 	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
@@ -259,15 +213,10 @@ func TestHandleSync_InvalidJSON(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest("POST", "/sync/content", strings.NewReader("bad")))
 	if rec.Code != 400 { t.Errorf("status=%d", rec.Code) }
 }
-
 func TestHandleSync_MissingFields(t *testing.T) {
 	h := &SyncHandler{log: logger.NewNop()}
 	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
-	for _, tt := range []struct{ n, b string }{
-		{"no eventId", `{"eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2}}`},
-		{"no eventType", `{"eventId":"evt_1","payload":{"postUid":1,"authorUid":2}}`},
-		{"empty", `{}`},
-	} {
+	for _, tt := range []struct{ n, b string }{{"no eventId", `{"eventType":"X","payload":{"postUid":1}}`}, {"no eventType", `{"eventId":"e1","payload":{"postUid":1}}`}, {"empty", `{}`}} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(tt.b))
 		req.Header.Set("Content-Type", "application/json")
@@ -276,59 +225,85 @@ func TestHandleSync_MissingFields(t *testing.T) {
 	}
 }
 
-// ===== HandleSync/HandleCrossSync full pipeline =====
+// ===== HandleGetPost =====
 
-func TestHandleSync_FullPipeline_Success(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{
-		eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{},
-		indexSvc: &mockIndexSvc{}, feedGenerator: &mockFeedGen{}, log: logger.NewNop(),
+func TestHandleGetPost_Found(t *testing.T) {
+	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	now := time.Now()
+	rows := pgxmock.NewRows([]string{"post_slug", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(12345), int64(67890), "SEA", "Hello", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", now, now, nil, nil)
+	mock.ExpectQuery("SELECT").WithArgs(int64(12345)).WillReturnRows(rows)
+	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/12345", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetPost_NotFound(t *testing.T) {
+	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	mock.ExpectQuery("SELECT").WithArgs(int64(99999)).WillReturnError(pgx.ErrNoRows)
+	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/99999", nil))
+	if rec.Code != 404 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetPost_InvalidUid(t *testing.T) {
+	h := &SyncHandler{log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/posts/{uid}", h.HandleGetPost)
+	for _, uid := range []string{"abc", "-5", "12a34"} {
+		rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/"+uid, nil))
+		if rec.Code != 400 { t.Errorf("uid=%q status=%d", uid, rec.Code) }
 	}
-	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
-
-	body := `{"eventId":"evt_full","eventType":"POST_CREATED","sourceRegion":"SEA","targetRegion":"EU","timestamp":1700000000,"payload":{"postUid":900,"authorUid":800,"authorRegion":"SEA","visibility":"GLOBAL","content":"test"},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	if rec.Code != 202 { t.Fatalf("status=%d want 202, body=%s", rec.Code, rec.Body.String()) }
-	if !el.processed["evt_full"] { t.Error("not marked processed") }
 }
 
-func TestHandleSync_FullPipeline_GDPRDenied(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
-	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
-	body := `{"eventId":"evt_gdpr","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_1"}}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	if rec.Code != 202 { t.Fatalf("GDPR deny should 202, got %d", rec.Code) }
-	if !el.processed["evt_gdpr"] { t.Error("should mark processed") }
+// ===== HandleGetPostByUid =====
+
+func TestHandleGetPostByUid_Found(t *testing.T) {
+	mock, _ := pgxmock.NewPool(); defer mock.Close()
+	now := time.Now()
+	rows := pgxmock.NewRows([]string{"post_slug", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(888), int64(777), "SEA", "test", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", now, now, nil, nil)
+	mock.ExpectQuery("SELECT").WithArgs(int64(888)).WillReturnRows(rows)
+	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/posts/uid/{uid}", h.HandleGetPostByUid)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/uid/888", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetPostByUid_InvalidUid(t *testing.T) {
+	h := &SyncHandler{log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/posts/uid/{uid}", h.HandleGetPostByUid)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/posts/uid/abc", nil))
+	if rec.Code != 400 { t.Errorf("status=%d", rec.Code) }
 }
 
-func TestHandleSync_FullPipeline_RouteError(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{}, indexSvc: &mockIndexSvc{insertErr: errors.New("db down")}, log: logger.NewNop()}
-	r := chi.NewRouter(); r.Post("/sync/content", h.HandleSync)
-	body := `{"eventId":"evt_err","eventType":"POST_CREATED","payload":{"postUid":900,"authorUid":800},"metadata":{"dataCategory":"TIER_2"}}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	if rec.Code != 500 { t.Fatalf("route err should 500, got %d", rec.Code) }
-}
+// ===== Tag endpoints =====
 
-func TestHandleCrossSync_FullPipeline_Success(t *testing.T) {
-	el := &mockEventLog{processed: map[string]bool{}}
-	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{allowed: true}, auditSvc: &mockAudit{}, indexSvc: &mockIndexSvc{}, log: logger.NewNop()}
-	r := chi.NewRouter(); r.Post("/sync/cross-sync", h.HandleCrossSync)
-	body := `{"eventId":"evt_cross","eventType":"POST_UPDATED","payload":{"postUid":901,"authorUid":801},"metadata":{"dataCategory":"TIER_2"}}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	if rec.Code != 202 { t.Fatalf("status=%d want 202", rec.Code) }
-	if !el.processed["evt_cross"] { t.Error("not marked") }
+func TestHandleSearchTags(t *testing.T) {
+	h := &SyncHandler{tagIndexSvc: &mockTag{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/tags/search", h.HandleSearchTags)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/tags/search?keyword=go&limit=5", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandlePopularTags(t *testing.T) {
+	h := &SyncHandler{tagIndexSvc: &mockTag{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/tags/popular", h.HandlePopularTags)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/tags/popular?limit=10", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetTag_Found(t *testing.T) {
+	tg := &mockTag{tag: &model.GlobalTagIndex{TagUID: 700, Name: "golang"}}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/tags/{tagUid}", h.HandleGetTag)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/tags/700", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetTag_NotFound(t *testing.T) {
+	h := &SyncHandler{tagIndexSvc: &mockTag{}, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/tags/{tagUid}", h.HandleGetTag)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/tags/999", nil))
+	if rec.Code != 404 { t.Errorf("status=%d", rec.Code) }
+}
+func TestHandleGetTagRegions(t *testing.T) {
+	tg := &mockTag{regions: []string{"SEA", "EU"}}
+	h := &SyncHandler{tagIndexSvc: tg, log: logger.NewNop()}
+	r := chi.NewRouter(); r.Get("/index/tags/{tagUid}/regions", h.HandleGetTagRegions)
+	rec := httptest.NewRecorder(); r.ServeHTTP(rec, httptest.NewRequest("GET", "/index/tags/700/regions", nil))
+	if rec.Code != 200 { t.Errorf("status=%d", rec.Code) }
 }

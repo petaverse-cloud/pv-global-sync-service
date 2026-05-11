@@ -306,6 +306,9 @@ func (h *SyncHandler) routeEvent(ctx context.Context, event *model.CrossRegionSy
 	case model.EventTypeTagDeleted:
 		return h.tagIndexSvc.DeleteTag(ctx, event)
 	case model.EventTypeTagStatsUpdated:
+		if event.Payload.TagPostCount == nil {
+			return nil // No post count to update — not an error
+		}
 		return h.tagIndexSvc.UpdateStats(ctx, event.Payload.TagUID, *event.Payload.TagPostCount)
 	default:
 		return nil
