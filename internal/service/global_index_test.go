@@ -256,6 +256,8 @@ func TestUpdatePost_Success(t *testing.T) {
 			[]string{"updated"},
 			event.Payload.MediaURLs,
 			event.Payload.PostUid,
+			pgxmock.AnyArg(), // authorNickname
+			pgxmock.AnyArg(), // authorAvatarURL
 		).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -279,7 +281,8 @@ func TestUpdatePost_NotFoundFallbackToInsert(t *testing.T) {
 	event := makeEvent(model.EventTypePostUpdated, 9000000099, 8000000099, "Fallback insert")
 
 	mock.ExpectExec("UPDATE global_post_index").
-		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), event.Payload.PostUid).
+		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), event.Payload.PostUid,
+			pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
 	mock.ExpectExec("INSERT INTO global_post_index").
