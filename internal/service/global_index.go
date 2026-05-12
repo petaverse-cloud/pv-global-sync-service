@@ -130,18 +130,27 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 			visibility = $2,
 			hashtags = $3,
 			media_urls = $4,
+			author_nickname = $6,
+			author_avatar_url = $7,
 			updated_at = NOW(),
 			synced_at = NOW()
 		WHERE uid = $5
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
+	var authorNickname, authorAvatarURL string
+	if event.Payload.AuthorProfile != nil {
+		authorNickname = event.Payload.AuthorProfile.Nickname
+		authorAvatarURL = event.Payload.AuthorProfile.AvatarURL
+	}
 	result, err := s.db.Exec(ctx, query,
 		truncatePreview(event.Payload.Content, 500),
 		event.Payload.Visibility,
 		hashtags,
 		event.Payload.MediaURLs,
 		event.Payload.PostUid,
+		authorNickname,
+		authorAvatarURL,
 	)
 	if err != nil {
 		return fmt.Errorf("update post uid=%d: %w", event.Payload.PostUid, err)
