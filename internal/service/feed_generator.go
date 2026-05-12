@@ -131,6 +131,10 @@ func (f *FeedGenerator) HandleDeletedPost(ctx context.Context, postUid int64) er
 // invalidateGlobalFeedCache deletes all global feed cache entries.
 // Called when a new post is created — stale caches would hide the new post.
 func (f *FeedGenerator) invalidateGlobalFeedCache(ctx context.Context) {
+	// No-op if Redis is not configured (e.g., in tests)
+	if f.redis == nil {
+		return
+	}
 	// Use SCAN to find all global feed keys and delete them
 	var cursor uint64
 	for {
