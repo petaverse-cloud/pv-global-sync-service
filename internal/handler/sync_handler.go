@@ -118,7 +118,7 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if event.EventID == "" || event.EventType == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields: eventId and eventType are required")
+		writeError(w, http.StatusBadRequest, "missing required fields: eventUid and eventType are required")
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if event.EventID == "" || event.EventType == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields: eventId and eventType are required")
+		writeError(w, http.StatusBadRequest, "missing required fields: eventUid and eventType are required")
 		return
 	}
 
@@ -228,7 +228,7 @@ var errNotDigit = fmt.Errorf("not a digit")
 func (h *SyncHandler) processEvent(ctx context.Context, event *model.CrossRegionSyncEvent, source string) error {
 	// Validate
 	if event.EventID == "" || event.EventType == "" {
-		return fmt.Errorf("missing required fields: eventId and eventType are required")
+		return fmt.Errorf("missing required fields: eventUid and eventType are required")
 	}
 
 	// Idempotency
