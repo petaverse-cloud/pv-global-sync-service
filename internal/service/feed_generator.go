@@ -92,8 +92,11 @@ func NewFeedGeneratorForTest(db FeedDBIF, redisClient FeedRedisIF, indexSvc Feed
 }
 
 // HandleNewPost triggers feed generation when a new post enters the global index.
-// Decides Push vs Pull based on author's follower count.
+// Also invalidates global feed cache since the feed rankings changed.
 func (f *FeedGenerator) HandleNewPost(ctx context.Context, authorUid int64, postUid int64) error {
+	// Invalidate all global feed caches — new post changes rankings for everyone
+	f.invalidateGlobalFeedCache(ctx)
+
 	followerCount, err := f.getFollowerCount(ctx, authorUid)
 	if err != nil {
 		f.log.Error("Failed to get follower count for feed generation",
@@ -123,6 +126,29 @@ func (f *FeedGenerator) HandleDeletedPost(ctx context.Context, postUid int64) er
 	f.log.Info("Post deleted from global index - feed caches will expire",
 		logger.Int64("post_uid", postUid))
 	return nil
+}
+
+// invalidateGlobalFeedCache deletes all global feed cache entries.
+// Called when a new post is created — stale caches would hide the new post.
+func (f *FeedGenerator) invalidateGlobalFeedCache(ctx context.Context) {
+	// Use SCAN to find all global feed keys and delete them
+	var cursor uint64
+	for {
+		keys, nextCursor, err := f.redis.Rdb().Scan(ctx, cursor, "user:feed:*:global", 100).Result()
+		if err != nil {
+			f.log.Warn("Failed to scan global feed cache keys", logger.Error(err))
+			return
+		}
+		if len(keys) > 0 {
+			if err := f.redis.Rdb().Del(ctx, keys...).Err(); err != nil {
+				f.log.Warn("Failed to delete global feed cache keys", logger.Error(err))
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 }
 
 // GetFeed retrieves a user's feed with ranking and pagination.
