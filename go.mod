@@ -2,7 +2,7 @@ module github.com/petaverse-cloud/pv-global-sync-service
 
 go 1.23.0
 
-toolchain go1.23.9
+toolchain go1.23.12
 
 require (
 	github.com/alicebob/miniredis/v2 v2.37.0
