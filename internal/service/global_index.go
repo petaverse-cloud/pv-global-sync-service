@@ -59,6 +59,16 @@ func NewGlobalIndexServiceWithDB(db DBTx, log *logger.Logger) *GlobalIndexServic
 func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossRegionSyncEvent) error {
 	now := time.Now().UTC()
 
+	// Use the post's original creation time if available, otherwise fall back to now.
+	createdAt := now
+	if event.Payload.CreatedAt != "" {
+		if t, err := time.Parse(time.RFC3339, event.Payload.CreatedAt); err == nil {
+			createdAt = t
+		} else if t, err := time.Parse(time.RFC3339Nano, event.Payload.CreatedAt); err == nil {
+			createdAt = t
+		}
+	}
+
 	query := `
 		INSERT INTO global_post_index (
 			uid, author_uid, author_region, content_preview, visibility,
@@ -103,7 +113,7 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		event.Metadata.GDPRCompliant,
 		event.Metadata.UserConsent,
 		event.Metadata.DataCategory,
-		now,
+		createdAt,
 		now,
 		authorNickname,
 		authorAvatarURL,

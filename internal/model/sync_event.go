@@ -60,12 +60,13 @@ type CrossRegionSyncEvent struct {
 
 // EventPayload contains the core data of the sync event
 type EventPayload struct {
-	PostUid      int64      `json:"postUid"` // Globally unique Snowflake uid (was: postId)
+	PostUid      int64      `json:"postUid"` // Globally unique Snowflake uid
 	AuthorUid    int64      `json:"authorUid"`
 	AuthorRegion Region     `json:"authorRegion"`
 	Visibility   Visibility `json:"visibility"`
 	Content      string     `json:"content,omitempty"`
 	MediaURLs    []string   `json:"mediaUrls,omitempty"`
+	CreatedAt    string     `json:"createdAt,omitempty"` // Original post creation time (ISO 8601)
 	// Author Metadata (Layer 1: Public Info)
 	AuthorProfile *AuthorProfile `json:"authorProfile,omitempty"`
 	// Tag fields (used when eventType is TAG_*)
