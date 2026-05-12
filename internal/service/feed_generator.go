@@ -195,7 +195,7 @@ func (f *FeedGenerator) pushMode(ctx context.Context, authorUid int64, postUid i
 func (f *FeedGenerator) getFollowingFeed(ctx context.Context, userID int64, cursor string, limit int, ttl time.Duration) ([]FeedItem, string, bool, error) {
 	// Try Redis cache first
 	items, nextCursor, hasMore, err := f.getFeedFromRedis(ctx, userID, "following", cursor, limit)
-	if err == nil && len(items) > 0 {
+	if err == nil && len(items) >= limit {
 		return items, nextCursor, hasMore, nil
 	}
 
@@ -237,7 +237,7 @@ func (f *FeedGenerator) getFollowingFeed(ctx context.Context, userID int64, curs
 func (f *FeedGenerator) getGlobalFeed(ctx context.Context, userID int64, cursor string, limit int, ttl time.Duration) ([]FeedItem, string, bool, error) {
 	// Try Redis cache first
 	items, nextCursor, hasMore, err := f.getFeedFromRedis(ctx, userID, "global", cursor, limit)
-	if err == nil && len(items) > 0 {
+	if err == nil && len(items) >= limit {
 		return items, nextCursor, hasMore, nil
 	}
 
@@ -267,7 +267,7 @@ func (f *FeedGenerator) getGlobalFeed(ctx context.Context, userID int64, cursor 
 func (f *FeedGenerator) getTrendingFeed(ctx context.Context, userID int64, cursor string, limit int, ttl time.Duration) ([]FeedItem, string, bool, error) {
 	// Try Redis cache first
 	items, nextCursor, hasMore, err := f.getFeedFromRedis(ctx, userID, "trending", cursor, limit)
-	if err == nil && len(items) > 0 {
+	if err == nil && len(items) >= limit {
 		return items, nextCursor, hasMore, nil
 	}
 
