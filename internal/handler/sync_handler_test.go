@@ -255,7 +255,7 @@ func TestHandleSync_Full_Success(t *testing.T) {
 	h := &SyncHandler{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{}, feedGenerator: &mockFeed{}, log: logger.NewNop()}
 	r := chi.NewRouter()
 	r.Post("/sync/content", h.HandleSync)
-	body := `{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_2"}}`
+	body := `{"eventUid":"e1","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_2"}}`
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -270,7 +270,7 @@ func TestHandleSync_GDPRDenied(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/sync/content", h.HandleSync)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_1"}}`))
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventUid":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_1"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(rec, req)
 	if rec.Code != 202 {
@@ -283,7 +283,7 @@ func TestHandleSync_RouteError(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/sync/content", h.HandleSync)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventId":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
+	req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(`{"eventUid":"e1","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(rec, req)
 	if rec.Code != 500 {
@@ -296,7 +296,7 @@ func TestHandleCrossSync_Full_Success(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/sync/cross-sync", h.HandleCrossSync)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader(`{"eventId":"e1","eventType":"POST_UPDATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
+	req := httptest.NewRequest("POST", "/sync/cross-sync", strings.NewReader(`{"eventUid":"e1","eventType":"POST_UPDATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_2"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(rec, req)
 	if rec.Code != 202 {
@@ -317,7 +317,7 @@ func TestHandleSync_MissingFields(t *testing.T) {
 	h := &SyncHandler{log: logger.NewNop()}
 	r := chi.NewRouter()
 	r.Post("/sync/content", h.HandleSync)
-	for _, tt := range []struct{ n, b string }{{"no eventId", `{"eventType":"X","payload":{"postUid":1}}`}, {"no eventType", `{"eventId":"e1","payload":{"postUid":1}}`}, {"empty", `{}`}} {
+	for _, tt := range []struct{ n, b string }{{"no eventId", `{"eventType":"X","payload":{"postUid":1}}`}, {"no eventType", `{"eventUid":"e1","payload":{"postUid":1}}`}, {"empty", `{}`}} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/sync/content", strings.NewReader(tt.b))
 		req.Header.Set("Content-Type", "application/json")

@@ -133,8 +133,8 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status":  "accepted",
-		"eventId": event.EventID,
+		"status":   "accepted",
+		"eventUid": event.EventID,
 	}); err != nil {
 		h.log.Error("Failed to write response", logger.Error(err))
 	}
@@ -170,8 +170,8 @@ func (h *SyncHandler) HandleCrossSync(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status":  "accepted",
-		"eventId": event.EventID,
+		"status":   "accepted",
+		"eventUid": event.EventID,
 	}); err != nil {
 		h.log.Error("Failed to write response", logger.Error(err))
 	}

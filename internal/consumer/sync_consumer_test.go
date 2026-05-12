@@ -104,7 +104,7 @@ func TestConsumerRouteEvent_Error(t *testing.T) {
 func TestHandleMessage_Success(t *testing.T) {
 	el := &mockEvtLog{m: map[string]bool{}}
 	c := &SyncConsumer{eventLog: el, gdprChecker: &mockGDPR{true}, auditSvc: &mockAudit{}, indexSvc: &mockIdx{}, feedGenerator: &mockFeed{}, log: logger.NewNop()}
-	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventId":"e1","eventType":"POST_CREATED","sourceRegion":"SEA","targetRegion":"EU","timestamp":1,"payload":{"postUid":900,"authorUid":800},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`))
+	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventUid":"e1","eventType":"POST_CREATED","sourceRegion":"SEA","targetRegion":"EU","timestamp":1,"payload":{"postUid":900,"authorUid":800},"metadata":{"gdprCompliant":true,"userConsent":true,"dataCategory":"TIER_2","crossBorderOk":true}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestHandleMessage_InvalidJSON(t *testing.T) {
 func TestHandleMessage_Idempotent(t *testing.T) {
 	el := &mockEvtLog{m: map[string]bool{"dup": true}}
 	c := &SyncConsumer{eventLog: el, log: logger.NewNop()}
-	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventId":"dup","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_2"}}`))
+	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventUid":"dup","eventType":"POST_CREATED","payload":{"postUid":1,"authorUid":2},"metadata":{"dataCategory":"TIER_2"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestHandleMessage_Idempotent(t *testing.T) {
 func TestHandleMessage_GDPRDenied(t *testing.T) {
 	el := &mockEvtLog{m: map[string]bool{}}
 	c := &SyncConsumer{eventLog: el, gdprChecker: &mockGDPR{false}, auditSvc: &mockAudit{}, log: logger.NewNop()}
-	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventId":"gdpr","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_1"}}`))
+	r, err := c.HandleMessage(context.Background(), makeMsg(`{"eventUid":"gdpr","eventType":"POST_CREATED","payload":{"postUid":1},"metadata":{"dataCategory":"TIER_1"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

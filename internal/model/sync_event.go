@@ -49,7 +49,7 @@ const (
 // CrossRegionSyncEvent represents a cross-region synchronization event
 // Aligned with wigowago-v2-distributed-architecture.md event definition
 type CrossRegionSyncEvent struct {
-	EventID      string        `json:"eventId"`
+	EventID      string        `json:"eventUid"`
 	EventType    SyncEventType `json:"eventType"`
 	SourceRegion Region        `json:"sourceRegion"`
 	TargetRegion Region        `json:"targetRegion"`
