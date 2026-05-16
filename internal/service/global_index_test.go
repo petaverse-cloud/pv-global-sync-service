@@ -205,7 +205,7 @@ func TestInsertPost_NewPost(t *testing.T) {
 	defer mock.Close()
 	svc := NewGlobalIndexServiceWithDB(mock, logger.NewNop())
 	event := makeEvent(model.EventTypePostCreated, 9000000001, 8000000001, "Hello world #test")
-	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	if err := svc.InsertPost(context.Background(), event); err != nil {
 		t.Fatalf("InsertPost: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestInsertPost_WithAuthorProfile(t *testing.T) {
 	svc := NewGlobalIndexServiceWithDB(mock, logger.NewNop())
 	event := makeEvent(model.EventTypePostCreated, 9000000002, 8000000002, "Post with author")
 	event.Payload.AuthorProfile = &model.AuthorProfile{Uid: 8000000002, Nickname: "TestAuthor", AvatarURL: "https://cdn.example.com/avatar.jpg"}
-	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	if err := svc.InsertPost(context.Background(), event); err != nil {
 		t.Fatalf("InsertPost: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestInsertPost_ContentTruncated(t *testing.T) {
 		longContent += "x"
 	}
 	event := makeEvent(model.EventTypePostCreated, 9000000004, 8000000004, longContent)
-	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO global_post_index").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	if err := svc.InsertPost(context.Background(), event); err != nil {
 		t.Fatalf("InsertPost: %v", err)
 	}
@@ -258,6 +258,9 @@ func TestUpdatePost_Success(t *testing.T) {
 			event.Payload.PostUid,
 			pgxmock.AnyArg(), // authorNickname
 			pgxmock.AnyArg(), // authorAvatarURL
+			pgxmock.AnyArg(), // postType
+			pgxmock.AnyArg(), // videoUrl
+			pgxmock.AnyArg(), // videoCoverUrl
 		).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -282,7 +285,8 @@ func TestUpdatePost_NotFoundFallbackToInsert(t *testing.T) {
 
 	mock.ExpectExec("UPDATE global_post_index").
 		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), event.Payload.PostUid,
-			pgxmock.AnyArg(), pgxmock.AnyArg()).
+			pgxmock.AnyArg(), pgxmock.AnyArg(),
+			pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
 	mock.ExpectExec("INSERT INTO global_post_index").

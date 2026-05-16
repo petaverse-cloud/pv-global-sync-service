@@ -334,7 +334,7 @@ func TestHandleGetPost_Found(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	now := time.Now()
-	rows := pgxmock.NewRows([]string{"uid", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(12345), int64(67890), "SEA", "Hello", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", now, now, nil, nil)
+	rows := pgxmock.NewRows([]string{"uid", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "post_type", "video_url", "video_cover_url", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(12345), int64(67890), "SEA", "Hello", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", 1, nil, nil, now, now, nil, nil)
 	mock.ExpectQuery("SELECT").WithArgs(int64(12345)).WillReturnRows(rows)
 	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
 	r := chi.NewRouter()
@@ -377,7 +377,7 @@ func TestHandleGetPostByUid_Found(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	now := time.Now()
-	rows := pgxmock.NewRows([]string{"uid", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(888), int64(777), "SEA", "test", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", now, now, nil, nil)
+	rows := pgxmock.NewRows([]string{"uid", "author_uid", "author_region", "content_preview", "visibility", "hashtags", "mentions", "media_urls_str", "likes_count", "comments_count", "shares_count", "views_count", "gdpr_compliant", "user_consent", "data_category", "post_type", "video_url", "video_cover_url", "created_at", "synced_at", "author_nickname", "author_avatar_url"}).AddRow(int64(888), int64(777), "SEA", "test", "GLOBAL", nil, nil, "", 0, 0, 0, 0, true, true, "TIER_2", 1, nil, nil, now, now, nil, nil)
 	mock.ExpectQuery("SELECT").WithArgs(int64(888)).WillReturnRows(rows)
 	h := &SyncHandler{indexSvc: service.NewGlobalIndexServiceWithDB(mock, logger.NewNop()), log: logger.NewNop()}
 	r := chi.NewRouter()
