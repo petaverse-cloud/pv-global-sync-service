@@ -60,13 +60,16 @@ type CrossRegionSyncEvent struct {
 
 // EventPayload contains the core data of the sync event
 type EventPayload struct {
-	PostUid      int64      `json:"postUid"` // Globally unique Snowflake uid
-	AuthorUid    int64      `json:"authorUid"`
-	AuthorRegion Region     `json:"authorRegion"`
-	Visibility   Visibility `json:"visibility"`
-	Content      string     `json:"content,omitempty"`
-	MediaURLs    []string   `json:"mediaUrls,omitempty"`
-	CreatedAt    string     `json:"createdAt,omitempty"` // Original post creation time (ISO 8601)
+	PostUid       int64      `json:"postUid"` // Globally unique Snowflake uid
+	AuthorUid     int64      `json:"authorUid"`
+	AuthorRegion  Region     `json:"authorRegion"`
+	Visibility    Visibility `json:"visibility"`
+	Content       string     `json:"content,omitempty"`
+	MediaURLs     []string   `json:"mediaUrls,omitempty"`
+	PostType      int        `json:"postType,omitempty"`
+	VideoURL      string     `json:"videoUrl,omitempty"`
+	VideoCoverURL string     `json:"videoCoverUrl,omitempty"`
+	CreatedAt     string     `json:"createdAt,omitempty"` // Original post creation time (ISO 8601)
 	// Author Metadata (Layer 1: Public Info)
 	AuthorProfile *AuthorProfile `json:"authorProfile,omitempty"`
 	// Tag fields (used when eventType is TAG_*)
@@ -109,6 +112,9 @@ type GlobalPostIndex struct {
 	GDPRCompliant  bool      `json:"gdprCompliant"`
 	UserConsent    bool      `json:"userConsent"`
 	DataCategory   string    `json:"dataCategory"`
+	PostType       int       `json:"postType"`
+	VideoURL       string    `json:"videoUrl,omitempty"`
+	VideoCoverURL  string    `json:"videoCoverUrl,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
 	SyncedAt       time.Time `json:"syncedAt"`
 	// Author Metadata (Layer 1: Public Info) - Nullable

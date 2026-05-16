@@ -24,6 +24,9 @@ type GlobalIndexPost struct {
 	CommentsCount  int
 	SharesCount    int
 	ViewsCount     int
+	PostType       int
+	VideoURL       string
+	VideoCoverURL  string
 	CreatedAt      time.Time
 	// Author Metadata (Layer 1: Public Info) - Nullable
 	AuthorNickname  *string
@@ -74,12 +77,14 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 			uid, author_uid, author_region, content_preview, visibility,
 			hashtags, mentions, media_urls, likes_count, comments_count, shares_count, views_count,
 			gdpr_compliant, user_consent, data_category, created_at, synced_at,
-			author_nickname, author_avatar_url
+			author_nickname, author_avatar_url,
+			post_type, video_url, video_cover_url
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, 0, 0, 0, 0,
 			$9, $10, $11, $12, $13,
-			$14, $15
+			$14, $15,
+			$16, $17, $18
 		)
 		ON CONFLICT (uid) DO UPDATE SET
 			author_uid = EXCLUDED.author_uid,
@@ -91,7 +96,10 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 			updated_at = NOW(),
 			synced_at = NOW(),
 			author_nickname = EXCLUDED.author_nickname,
-			author_avatar_url = EXCLUDED.author_avatar_url
+			author_avatar_url = EXCLUDED.author_avatar_url,
+			post_type = EXCLUDED.post_type,
+			video_url = EXCLUDED.video_url,
+			video_cover_url = EXCLUDED.video_cover_url
 	`
 
 	hashtags := extractHashtags(event.Payload.Content)
@@ -117,6 +125,9 @@ func (s *GlobalIndexService) InsertPost(ctx context.Context, event *model.CrossR
 		now,
 		authorNickname,
 		authorAvatarURL,
+		event.Payload.PostType,
+		event.Payload.VideoURL,
+		event.Payload.VideoCoverURL,
 	)
 
 	if err != nil {
@@ -161,6 +172,9 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 		event.Payload.PostUid,
 		authorNickname,
 		authorAvatarURL,
+		event.Payload.PostType,
+		event.Payload.VideoURL,
+		event.Payload.VideoCoverURL,
 	)
 	if err != nil {
 		return fmt.Errorf("update post uid=%d: %w", event.Payload.PostUid, err)
@@ -426,6 +440,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 	query := `
 		SELECT uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
+		       post_type, video_url, video_cover_url,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index
 		ORDER BY created_at DESC
@@ -443,6 +458,7 @@ func (s *GlobalIndexService) GetGlobalPosts(ctx context.Context, limit int) ([]G
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.PostType, &p.VideoURL, &p.VideoCoverURL,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
