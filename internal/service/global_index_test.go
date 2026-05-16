@@ -293,6 +293,7 @@ func TestUpdatePost_NotFoundFallbackToInsert(t *testing.T) {
 		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(),
 			pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(),
 			pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(),
+			pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(),
 			pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
@@ -387,13 +388,17 @@ func TestGetPost_Found(t *testing.T) {
 		"uid", "author_uid", "author_region", "content_preview", "visibility",
 		"hashtags", "mentions", "media_urls_str",
 		"likes_count", "comments_count", "shares_count", "views_count",
-		"gdpr_compliant", "user_consent", "data_category", "created_at", "synced_at",
+		"gdpr_compliant", "user_consent", "data_category",
+		"post_type", "video_url", "video_cover_url",
+		"created_at", "synced_at",
 		"author_nickname", "author_avatar_url",
 	}).AddRow(
 		int64(9000000030), int64(8000000030), "SEA", "Hello world", "GLOBAL",
 		[]byte("{test,go}"), []byte("{1,2}"), "https://a.jpg,https://b.jpg",
 		10, 5, 2, 100,
-		true, true, "TIER_2", now, now,
+		true, true, "TIER_2",
+		1, nil, nil,
+		now, now,
 		nil, nil,
 	)
 
