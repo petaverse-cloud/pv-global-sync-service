@@ -25,8 +25,8 @@ type GlobalIndexPost struct {
 	SharesCount    int
 	ViewsCount     int
 	PostType       int
-	VideoURL       string
-	VideoCoverURL  string
+	VideoURL       *string
+	VideoCoverURL  *string
 	CreatedAt      time.Time
 	// Author Metadata (Layer 1: Public Info) - Nullable
 	AuthorNickname  *string
