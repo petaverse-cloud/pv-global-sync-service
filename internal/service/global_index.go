@@ -153,6 +153,9 @@ func (s *GlobalIndexService) UpdatePost(ctx context.Context, event *model.CrossR
 			media_urls = $4,
 			author_nickname = $6,
 			author_avatar_url = $7,
+			post_type = $8,
+			video_url = $9,
+			video_cover_url = $10,
 			updated_at = NOW(),
 			synced_at = NOW()
 		WHERE uid = $5
@@ -232,7 +235,9 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postUid int64) (*model
 		SELECT uid, author_uid, author_region, content_preview, visibility,
 		       hashtags, mentions, COALESCE(array_to_string(media_urls, ','), '') AS media_urls_str,
 		       likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at,
+		       gdpr_compliant, user_consent, data_category,
+		       post_type, video_url, video_cover_url,
+		       created_at, synced_at,
 		       author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE uid = $1
@@ -249,6 +254,7 @@ func (s *GlobalIndexService) GetPost(ctx context.Context, postUid int64) (*model
 		&hashtags, &mentions, &mediaURLsStr,
 		&post.LikesCount, &post.CommentsCount, &post.SharesCount, &post.ViewsCount,
 		&post.GDPRCompliant, &post.UserConsent, &post.DataCategory,
+		&post.PostType, &post.VideoURL, &post.VideoCoverURL,
 		&createdAt, &syncedAt,
 		&post.AuthorNickname, &post.AuthorAvatarURL,
 	)
@@ -275,7 +281,9 @@ func (s *GlobalIndexService) GetPostsByAuthor(ctx context.Context, authorID int6
 	query := `
 		SELECT uid, author_uid, author_region, content_preview, visibility,
 		       hashtags, likes_count, comments_count, shares_count, views_count,
-		       gdpr_compliant, user_consent, data_category, created_at, synced_at
+		       gdpr_compliant, user_consent, data_category,
+		       post_type, video_url, video_cover_url,
+		       created_at, synced_at
 		FROM global_post_index
 		WHERE author_uid = $1
 		ORDER BY created_at DESC
@@ -299,6 +307,7 @@ func (s *GlobalIndexService) GetPostsByAuthor(ctx context.Context, authorID int6
 			&hashtags,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
 			&p.GDPRCompliant, &p.UserConsent, &p.DataCategory,
+			&p.PostType, &p.VideoURL, &p.VideoCoverURL,
 			&createdAt, &syncedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
@@ -405,6 +414,7 @@ func truncatePreview(content string, maxLen int) string {
 // GetPostsFromAuthors retrieves global posts from a list of authors.
 // Used for the "following" feed pull mode.
 func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs []int64, limit int) ([]GlobalIndexPost, error) {
+	// Uses the same query as GetGlobalPosts but filtered by author IDs
 	query := `
 		SELECT uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
@@ -426,6 +436,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.PostType, &p.VideoURL, &p.VideoCoverURL,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
@@ -491,6 +502,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 		var p GlobalIndexPost
 		if err := rows.Scan(&p.PostUid, &p.AuthorUid, &p.ContentPreview,
 			&p.LikesCount, &p.CommentsCount, &p.SharesCount, &p.ViewsCount,
+			&p.PostType, &p.VideoURL, &p.VideoCoverURL,
 			&p.CreatedAt, &p.AuthorNickname, &p.AuthorAvatarURL); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
