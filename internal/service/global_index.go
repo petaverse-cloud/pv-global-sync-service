@@ -418,6 +418,7 @@ func (s *GlobalIndexService) GetPostsFromAuthors(ctx context.Context, authorIDs 
 	query := `
 		SELECT uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
+		       post_type, video_url, video_cover_url,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE author_uid = ANY($1)
@@ -484,6 +485,7 @@ func (s *GlobalIndexService) GetTrendingPosts(ctx context.Context, limit int) ([
 	query := `
 		SELECT uid, author_uid, content_preview,
 		       likes_count, comments_count, shares_count, views_count,
+		       post_type, video_url, video_cover_url,
 		       created_at, author_nickname, author_avatar_url
 		FROM global_post_index
 		WHERE created_at > NOW() - INTERVAL '24 hours'

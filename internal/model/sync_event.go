@@ -113,8 +113,8 @@ type GlobalPostIndex struct {
 	UserConsent    bool      `json:"userConsent"`
 	DataCategory   string    `json:"dataCategory"`
 	PostType       int       `json:"postType"`
-	VideoURL       string    `json:"videoUrl,omitempty"`
-	VideoCoverURL  string    `json:"videoCoverUrl,omitempty"`
+	VideoURL       *string   `json:"videoUrl,omitempty"`
+	VideoCoverURL  *string   `json:"videoCoverUrl,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
 	SyncedAt       time.Time `json:"syncedAt"`
 	// Author Metadata (Layer 1: Public Info) - Nullable
